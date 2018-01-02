@@ -1,0 +1,23 @@
+{
+    "rules": [
+      {
+          "rewrite": null,
+          "out_ports": [
+              34
+          ],
+          "mask": null,
+          "in_ports": [
+              31,
+              32
+          ],
+          "action": "fwd",
+          "match": "111xxxxx"
+      }
+    ],
+    "ports": [
+        31,
+        32,
+        34
+    ],
+    "id": 3
+}

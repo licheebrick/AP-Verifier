@@ -6,11 +6,11 @@
 #define AP_VERIFIER_AP_NODE_H
 
 #include "ap_verifier_utils.h"
+
 class APNode {
 public:
-    List_t match;
-    uint32_t out_port;
+    List_t out_ports;
     uint32_t in_port;
-    PREDICATE_TYPE type;
+    AP_TYPE type;
 };
 #endif //AP_VERIFIER_AP_NODE_H

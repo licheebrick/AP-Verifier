@@ -7,13 +7,23 @@
 
 #include <bdd.h>
 #include "ap_verifier_utils.h"
+using namespace std;
 
-class PredicateNode;
 class PredicateNode {
 public:
     bdd predicate;
-    uint32_t out_port;
+    struct List_t out_ports;
     uint32_t in_port;
     PREDICATE_TYPE type;
+
+    PredicateNode(uint32_t in_port, string match, PREDICATE_TYPE type, int hdr_len);
+
+    ~PredicateNode();
+
+    void print_predicate_node();
 };
+
+bdd match2bdd(string match, int length);
+void allsatPrintHandler(char* varset, int size);
+
 #endif //AP_VERIFIER_PREDICATE_NODE_H

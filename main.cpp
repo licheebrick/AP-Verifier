@@ -2,53 +2,41 @@
 #include <bdd.h>
 #include "json/json.h"
 #include <fstream>
+#include <dirent.h>
+#include <sys/time.h>
 #include "ap_verifier.h"
+#include <log4cxx/logger.h>
+#include "log4cxx/propertyconfigurator.h"
+#include <bitset>
 
 using namespace std;
-int var_num = 4;
-bdd *singleVarTrue;
-bdd *singleVarFalse;
+using namespace log4cxx;
+using namespace log4cxx::helpers;
 
-bdd construct_from_string(string str, int len) {
-    bdd nbdd = bddtrue;
-    for (int i = 0; i < len; i++) {
-        if (str[i] == 'x')
-            continue;
-        else {
-            if (str[i] == '1')
-                nbdd &= singleVarTrue[i];
-            else
-                nbdd &= singleVarFalse[i];
-        }
-    }
-    return nbdd;
+int var_num = 8;
+
+void testBitsetBasic() {
+    bitset<8> be(0xff);
+    cout << be << endl;
 }
 
-void testBDDbasic() {
-    string a = "xxx1";
-    string b = "1xx0";
-    bdd abdd, bbdd;
-    abdd = construct_from_string(a, var_num);
-    bbdd = construct_from_string(b, var_num);
-    cout << bddtable << abdd << endl;
-    cout << bddtable << bbdd << endl;
-    bdd x = abdd | bbdd;
-    cout << bddtable << x << endl;
-    if (x != bddfalse) {
-        cout << "Wrong..." << endl;
-    }
-    string r1 = "xx11";
-    string r2 = "11xx";
-    string r3 = "xxxx";
-    bdd bdd1 = construct_from_string(r1, var_num);
-    bdd bdd2 = construct_from_string(r2, var_num);
-    bdd bdd3 = construct_from_string(r3, var_num);
-    bdd bdd2A = (bdd3 - bdd2) | bdd1;
-    bdd bdd2B = bdd2 - bdd1;
-    cout << bddtable << bdd2A << endl;
-    cout << bddtable << bdd2B << endl;
-    cout << bdd_satcount(bdd2A) << endl;
-    cout << bdd_satcount(bdd2B) << endl;
+void testBddBasic() {
+    bdd bdd3 = match2bdd("xxxxxx11", var_num);
+    bdd bdd1 = match2bdd("xx11xxxx", var_num);
+    bdd bdd2 = match2bdd("10xxxxxx", var_num);
+
+    printf("BDD1's all sat count: %lf\n", bdd_satcount(bdd1));
+
+    cout << bdd_satcount(bdd1) << endl;
+
+    bdd_allsat(bdd1 & bdd2, allsatPrintHandler);
+    bdd_allsat((bdd1 & bdd2 - bdd3), allsatPrintHandler);
+
+    cout << bddtable << bdd1 << endl;
+    cout << bdd_nodecount(bdd1) << endl;
+    cout << bddtable << (bdd1 & bdd2) << endl;
+
+    cout << bddtable << bdd_satone(bdd2) << endl;
 }
 
 list<long> load_apverifier_from_dir(string json_file_path, APVerifier *A) {
@@ -58,6 +46,7 @@ list<long> load_apverifier_from_dir(string json_file_path, APVerifier *A) {
     Json::Value root;
     Json::Reader reader;
     list<long> t_list;
+    int router_counter = 0;
     long total_run_time = 0;
 
     // read topology
@@ -74,14 +63,51 @@ list<long> load_apverifier_from_dir(string json_file_path, APVerifier *A) {
     }
     A->print_topology();
     jsfile.close();
+
+    // read other json file
+    struct dirent *ent;
+    DIR *dir = opendir(json_file_path.c_str());
+    if (dir != NULL) {
+        while ((ent = readdir(dir)) != NULL) {
+            long run_time = 0;
+            file_name = string(ent->d_name);
+            if (file_name.find(".rules.json") != string::npos ||
+                    file_name.find(".tf.json") != string::npos) {
+                file_name = json_file_path + "/" + file_name;
+                printf("=== Loading rule file %s to APVerifier ===\n", file_name.c_str());
+                jsfile.open(file_name.c_str());
+                reader.parse(jsfile, root, false);
+                uint32_t router_id = root["id"].asInt();
+                gettimeofday(&start, NULL);
+                A->add_then_load_router(router_id, &root);
+                gettimeofday(&end, NULL);
+                run_time = end.tv_usec - start.tv_usec;
+                if (run_time < 0) {
+                    run_time = 1000000 * (end.tv_sec - start.tv_sec);
+                }
+                printf("%d us used.\n", run_time);
+                A->id_to_router[router_id]->print_router();
+                total_run_time += run_time;
+                t_list.push_back(run_time);
+                jsfile.close();
+                router_counter++;
+
+            }
+        }
+    }
+    printf("Total loading time: %ld us, %d routers, average loading time: %ld us", total_run_time, router_counter,
+    total_run_time / router_counter);
+    closedir(dir);
+    return t_list;
 }
 
 int main(int argc, char* argv[]) {
     std::cout << "Hello, here is atomic-predicates Verifier." << std::endl;
-    bool do_run_test = false;
+    bool do_run_test = true;
     bool do_load_json_files = false;
     int hdr_len = 1;
     var_num = 8;
+    testBitsetBasic();
 
     string json_files_path = "";
 
@@ -121,24 +147,20 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    // configure log4cxx.
+    PropertyConfigurator::configure("../Log4cxxConfig.conf");
+
     APVerifier *A = new APVerifier(var_num);
 
     // prepare bdd basics
-    bdd_init(10000, 10000);
+    bdd_init(10000, 1000);
     bdd_setvarnum(var_num);
-    singleVarTrue = (bdd *)malloc(sizeof(bdd) * var_num);
-    singleVarFalse = (bdd *)malloc(sizeof(bdd) * var_num);
-    for (int i = 0; i < var_num; i++) {
-        singleVarTrue[i] = bdd_ithvar(i);
-        singleVarFalse[i] = bdd_nithvar(i);
-    }
-    if (do_run_test) {
-        testBDDbasic();
-    }
+//    testBddBasic();
 
     if (do_load_json_files) {
         load_apverifier_from_dir(json_files_path, A);
     }
+
     bdd_done();
     return 0;
 }
