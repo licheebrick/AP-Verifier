@@ -18,17 +18,14 @@ class Router {
 public:
     const uint32_t router_id;
 
-    //TODO: map's value better be pointer!
     // map from inport to its predicate map
-    std::map< uint32_t, std::map<Json::Value, PredicateNode*> > predicate_map;
+    std::map< uint32_t, std::map<Json::Value, PredicateNode*>* > predicate_map;
 
-    //TODO: also revised to pointer!
     // map from inport to the packet header space already dealt with on this in_port
     std::map< uint32_t, bdd > dealt_bdd_map;
 
-    //TODO: also revised to pointer!
     // map from inport to its ap represented in bool vector;
-    std::map< uint32_t, std::map<Json::Value, APNodeV*> > ap_vec_map;
+    std::map< uint32_t, std::map<Json::Value, APNodeV*>* > ap_vec_map;
 
     // constructor
     Router(uint32_t id);
@@ -38,6 +35,14 @@ public:
 
     void print_router();
 
-    void convert_to_ap(AP_TYPE type, std::vector< bdd* >* ap_list);
+    void convert_to_ap(AP_TYPE type, std::vector< bdd >* ap_list);
+
+    void print_router_ap_map(AP_TYPE type);
+
+    void print_router_apv_map();
+
+    void print_router_apb_map();
+
+    void print_router_apn_map();
 };
 #endif //AP_VERIFIER_ROUTER_H

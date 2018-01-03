@@ -15,7 +15,7 @@ PredicateNode::~PredicateNode(){
 }
 
 void PredicateNode::print_predicate_node() {
-    printf("Outport: %s\n", list_to_string(this->out_ports).c_str());
+    printf("Outports: %s\n", list_to_string(this->out_ports).c_str());
     printf("Match packet header number: %lf\n", bdd_satcount(this->predicate));
     bdd_allsat(this->predicate, allsatPrintHandler);
 }

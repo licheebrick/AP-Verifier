@@ -15,9 +15,11 @@ class APNodeV : public APNode {
 public:
     vector<bool>* match;
 
-    APNodeV(PredicateNode* pn, vector< bdd* >* ap_list);
+    APNodeV(PredicateNode* pn, vector< bdd >* ap_list);
 
     ~APNodeV();
+
+    void print_apv_node();
 };
 
 #endif //AP_VERIFIER_AP_NODEV_H

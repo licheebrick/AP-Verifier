@@ -3,22 +3,45 @@
 //
 
 #include "ap_verifier.h"
-#include "ap_verifier_utils.h"
 #include <assert.h>
 #include <set>
-#include <list>
 
 using namespace std;
 using namespace log4cxx;
 
 LoggerPtr APVerifier::logger(Logger::getLogger("APVerifier"));
 
-APVerifier::APVerifier(int length) {
+APVerifier::APVerifier(int length, AP_TYPE type) {
     this->length = length;
+    this->ap_type = type;
 }
 
 APVerifier::~APVerifier() {
+    printf("Into ~APVerifier().\n");
+    // clear topology
+    std::map< uint32_t, std::vector<uint32_t>* >::iterator tpit;
+    for (tpit = topology.begin(); tpit != topology.end(); tpit++) {
+        if (tpit->second != NULL) {
+            delete (*tpit).second;
+            tpit->second = NULL;
+        }
+    }
+    topology.clear();
 
+    // clear id_to_router
+    std::map< uint32_t, Router* >::iterator rit;
+    for (rit = id_to_router.begin(); rit != id_to_router.end(); rit++) {
+        if (rit->second != NULL) {
+            delete rit->second;
+            rit->second = NULL;
+        }
+    }
+    id_to_router.clear();
+
+    // clear ap_bdd_list
+    std::vector< bdd > tmp;
+    ap_bdd_list->swap(tmp);
+    delete ap_bdd_list;
 }
 
 void APVerifier::add_link(uint32_t from_port, uint32_t to_port) {
@@ -42,7 +65,6 @@ void APVerifier::print_topology() {
 }
 
 void APVerifier::add_then_load_router(uint32_t router_id, Json::Value *root) {
-    int rule_counter = 0;
     if (id_to_router.count(router_id) == 0 && router_id > 0) {
         Router* router = new Router(router_id);
         id_to_router[router_id] = router;
@@ -63,21 +85,23 @@ void APVerifier::add_then_load_router(uint32_t router_id, Json::Value *root) {
                         // We have never encountered any rule on this inport before;
                         PredicateNode* predicate_node = new PredicateNode(inport, match, FWD, this->length);
                         predicate_node->out_ports = val_to_list(rules[i]["out_ports"]);
-                        router->predicate_map[inport].insert(make_pair(rules[i]["out_ports"], predicate_node));
-                        router->dealt_bdd_map[inport] = bddfalse;
+                        map<Json::Value, PredicateNode*>* port_map = new map<Json::Value, PredicateNode*>;
+                        port_map->insert(make_pair(rules[i]["out_ports"], predicate_node));
+                        router->predicate_map.insert(make_pair(inport, port_map));
+                        router->dealt_bdd_map[inport] = bdd_false();
                         router->dealt_bdd_map[inport] = router->dealt_bdd_map[inport] | predicate_node->predicate;
                     } else {
-                        if (router->predicate_map[inport].count(rules[i]["out_ports"]) == 0) {
+                        if (router->predicate_map[inport]->count(rules[i]["out_ports"]) == 0) {
                             // We encountered rule on this inport, but never this action (outports)
                             // So we need to subtract the already dealt bdd
                             PredicateNode* predicate_node = new PredicateNode(inport, match, FWD, this->length);
                             predicate_node->out_ports = val_to_list(rules[i]["out_ports"]);
                             predicate_node->predicate -= router->dealt_bdd_map[inport];
                             router->dealt_bdd_map[inport] |= predicate_node->predicate;
-                            router->predicate_map[inport].insert(make_pair(rules[i]["out_ports"], predicate_node));
+                            router->predicate_map[inport]->insert(make_pair(rules[i]["out_ports"], predicate_node));
                         } else {
                             // We encountered rule on this inport with this action (outports)
-                            PredicateNode* predicate_node = router->predicate_map[inport][rules[i]["out_ports"]];
+                            PredicateNode* predicate_node = (router->predicate_map[inport])->at(rules[i]["out_ports"]);
                             bdd new_add = match2bdd(match, this->length) - router->dealt_bdd_map[inport];
                             predicate_node->predicate |= new_add;
                             router->dealt_bdd_map[inport] |= new_add;
@@ -102,30 +126,30 @@ void APVerifier::add_then_load_router(uint32_t router_id, Json::Value *root) {
 void APVerifier::make_atomic_predicates() {
     // generate ap_bdd_list
     std::map< uint32_t, Router* >::iterator it;
-    std::list< bdd* > ap_list;
+    std::list< bdd > ap_list;
     bdd true_bdd = bdd_true();
-    ap_list.push_back(&true_bdd);
+    ap_list.push_back(true_bdd);
     for (it = id_to_router.begin(); it != id_to_router.end(); it++) { // it is router iterator
-        std::map< uint32_t, std::map<Json::Value, PredicateNode*> >::iterator port_it;
+        std::map< uint32_t, std::map<Json::Value, PredicateNode*>* >::iterator port_it;
         for (port_it = (*it).second->predicate_map.begin(); port_it != (*it).second->predicate_map.end(); port_it++) {
             // port_it is port predicate map iterator
             std::map< Json::Value, PredicateNode* >::iterator pn_it;
-            for (pn_it = (*port_it).second.begin(); pn_it != (*port_it).second.end(); pn_it++) {
+            for (pn_it = (*port_it).second->begin(); pn_it != (*port_it).second->end(); pn_it++) {
                 // pn_it is predicate node iterator
                 bdd P = (*pn_it).second->predicate;
                 if (P != bddfalse && P != bddtrue) {
                     int ori_size = int(ap_list.size());
                     for (int i = 0; i < ori_size; i++) {
                         bool del_flag = false;
-                        bdd *bdd_now = ap_list.back();
-                        bdd truesect = (*bdd_now) & P;
-                        bdd falsesect = (*bdd_now) & (!P);
+                        bdd bdd_now = ap_list.back();
+                        bdd truesect = bdd_now & P;
+                        bdd falsesect = bdd_now & (!P);
                         if (truesect != bddfalse) {
-                            ap_list.push_front(&truesect);
+                            ap_list.push_front(truesect);
                             del_flag = true;
                         }
                         if (falsesect != bddfalse) {
-                            ap_list.push_front(&falsesect);
+                            ap_list.push_front(falsesect);
                             del_flag = true;
                         }
                         if (del_flag) {
@@ -138,8 +162,12 @@ void APVerifier::make_atomic_predicates() {
     }
     //TODO: make sure here is safe... and valid...
     printf("Finish generate atomic predicates, total %ld predicates for this network.\n", ap_list.size());
-    vector<bdd*>* ap_bdd_vec = new vector<bdd*>{make_move_iterator(begin(ap_list)), make_move_iterator(end(ap_list))};
+    vector<bdd>* ap_bdd_vec = new vector<bdd>{make_move_iterator(begin(ap_list)), make_move_iterator(end(ap_list))};
     this->ap_bdd_list = ap_bdd_vec;
+    printf("These atomic predicates are as follows:\n");
+    for (size_t i = 0; i < this->ap_bdd_list->size(); i++) {
+        bdd_allsat(this->ap_bdd_list->at(i), allsatPrintHandler);
+    }
 }
 
 void APVerifier::convert_router_to_ap(AP_TYPE type) {
@@ -148,4 +176,13 @@ void APVerifier::convert_router_to_ap(AP_TYPE type) {
     for (it = id_to_router.begin(); it != id_to_router.end(); it++) {
         (*it).second->convert_to_ap(type, this->ap_bdd_list);
     }
+    printf("Finished converting all router's predicates to ap-vector...\n");
+
+    for (it = id_to_router.begin(); it != id_to_router.end(); it++) {
+        (*it).second->print_router_ap_map(type);
+    }
+}
+
+void APVerifier::query_reachability(uint32_t from_port, uint32_t to_port) {
+
 }

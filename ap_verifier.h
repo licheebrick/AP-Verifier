@@ -22,6 +22,8 @@ public:
     // header length
     int length;
 
+    AP_TYPE ap_type;
+
     // topology
     std::map< uint32_t, std::vector<uint32_t>* > topology;
 
@@ -29,12 +31,12 @@ public:
     std::map< uint32_t, Router* > id_to_router;
 
     // router port map: from router_id to port list;
-    std::map< uint32_t, List_t> router_to_ports;
+    // std::map< uint32_t, List_t> router_to_ports;
 
     // list to place atomic predicates represented in bdd;
-    std::vector< bdd* >* ap_bdd_list;
+    std::vector< bdd >* ap_bdd_list;
 
-    APVerifier(int length);
+    APVerifier(int length, AP_TYPE type);
     int get_length() { return this->length; }
 
     ~APVerifier();
@@ -48,6 +50,8 @@ public:
     void make_atomic_predicates();
 
     void convert_router_to_ap(AP_TYPE type);
+
+    void query_reachability(uint32_t from_port, uint32_t to_port);
 };
 
 bdd match2bdd(string match, int length);
