@@ -3,6 +3,7 @@
 //
 
 #include "ap_nodeV.h"
+#include "ap_verifier_utils.h"
 
 APNodeV::APNodeV(PredicateNode* pn, vector< bdd >* ap_list) {
     this->in_port = pn->in_port;
@@ -25,8 +26,6 @@ APNodeV::~APNodeV() {
 
 void APNodeV::print_apv_node() {
     printf("Outports: %s\n", list_to_string(this->out_ports).c_str());
-    printf("Match vector: \n[");
-    for (vector<bool>::const_iterator i = this->match->begin(); i != this->match->end(); ++i)
-        cout << *i << ", ";
-    cout << ']' << endl;
+    printf("Match vector: ");
+    print_bool_vector(*this->match);
 }

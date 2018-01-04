@@ -3,7 +3,7 @@ project(ap_verifier)
 
 set(CMAKE_CXX_STANDARD 11)
 
-set(SOURCE_FILES main.cpp ap_verifier.cpp ap_verifier.h ap_verifier_utils.h predicate_node.h predicate_node.cpp ap_verifier_util.cpp router.h ap_node.h ap_node.cpp router.cpp ap_nodeS.h ap_nodeS.cpp ap_nodeV.h ap_nodeV.cpp)
+set(SOURCE_FILES main.cpp ap_verifier.cpp ap_verifier.h ap_verifier_utils.h predicate_node.h predicate_node.cpp ap_verifier_util.cpp router.h ap_node.h ap_node.cpp router.cpp ap_nodeS.h ap_nodeS.cpp ap_nodeV.h ap_nodeV.cpp ap_nodeB.h ap_nodeB.cpp)
 
 link_directories(/usr/local/lib)
 link_directories(/usr/local/Cellar/log4cxx/0.10.0_1/lib)

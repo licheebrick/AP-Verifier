@@ -104,12 +104,12 @@ list<long> load_apverifier_from_dir(string json_file_path, APVerifier *A) {
     for (size_t i = 0; i < A->ap_bdd_list->size(); i++) {
         bdd_allsat(A->ap_bdd_list->at(i), allsatPrintHandler);
     }
-    A->convert_router_to_ap(VECTOR);
+    A->convert_router_to_ap();
     return t_list;
 }
 
 void load_action_file(string json_action_file, APVerifier *A) {
-    printf("Loading action file %s/n", json_action_file.c_str());
+    printf("Loading action file %s\n", json_action_file.c_str());
     struct timeval start, end;
     long run_time;
     ifstream jsfile;
@@ -182,9 +182,9 @@ int main(int argc, char* argv[]) {
             json_files_path = string(argv[++i]);
         }
 
-        if ( strcmp(argv[i],"--policy") == 0)  {
+        if ( strcmp(argv[i],"--action") == 0)  {
             if (i+1 >= argc) {
-                printf("Please specify policy file after --policy.\n");
+                printf("Please specify policy file after --action.\n");
                 return -1;
             }
             do_load_action = true;
@@ -204,7 +204,7 @@ int main(int argc, char* argv[]) {
     // configure log4cxx.
     PropertyConfigurator::configure("../Log4cxxConfig.conf");
 
-    APVerifier *A = new APVerifier(var_num);
+    APVerifier *A = new APVerifier(var_num, NONE);
 
     // prepare bdd basics
     bdd_init(10000, 1000);

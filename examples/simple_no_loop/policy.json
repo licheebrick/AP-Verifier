@@ -5,8 +5,8 @@
           "id": 1,
           "method": "query_reach",
           "params": {
-            "from_port": 5,
-            "to_port": 14
+            "from_port": 21,
+            "to_port": 34
           }
         }
     ]

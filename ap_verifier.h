@@ -5,8 +5,6 @@
 #ifndef AP_VERIFIER_AP_VERIFIER_H
 #define AP_VERIFIER_AP_VERIFIER_H
 #include <map>
-#include <vector>
-#include <list>
 #include <json/json.h>
 #include "ap_verifier_utils.h"
 #include "predicate_node.h"
@@ -24,6 +22,8 @@ public:
 
     AP_TYPE ap_type;
 
+    uint32_t ap_size;
+
     // topology
     std::map< uint32_t, std::vector<uint32_t>* > topology;
 
@@ -35,6 +35,9 @@ public:
 
     // list to place atomic predicates represented in bdd;
     std::vector< bdd >* ap_bdd_list;
+
+    // map from port_id to router_id
+    std::map< uint32_t, uint32_t > inport_to_router;
 
     APVerifier(int length, AP_TYPE type);
     int get_length() { return this->length; }
@@ -49,9 +52,18 @@ public:
 
     void make_atomic_predicates();
 
-    void convert_router_to_ap(AP_TYPE type);
+    void convert_router_to_ap();
 
     void query_reachability(uint32_t from_port, uint32_t to_port);
+
+    void propagate_bdd(bdd packet_header, std::list< uint32_t > passed_port, uint32_t from_port,
+                       uint32_t dst_port);
+
+    void propagate_vec(std::vector< bool > packet_header, std::list< uint32_t > passed_port, uint32_t from_port,
+                   uint32_t dst_port);
+
+    void propagate_bset(std::bitset<BITSETLEN> packet_header, std::list< uint32_t > passed_port, uint32_t from_port,
+                       uint32_t dst_port);
 };
 
 bdd match2bdd(string match, int length);

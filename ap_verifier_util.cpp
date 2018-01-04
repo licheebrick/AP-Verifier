@@ -2,6 +2,7 @@
 // Created by li danyang on 2017/12/30.
 //
 #include <sstream>
+#include <iostream>
 #include "ap_verifier_utils.h"
 
 int compare (const void * a, const void * b)
@@ -39,4 +40,20 @@ std::string list_to_string(List_t p) {
     }
     result << ")";
     return result.str();
+}
+
+void print_bool_vector(std::vector< bool > packet_header) {
+    printf("[ ");
+    for (std::vector< bool >::iterator it = packet_header.begin(); it != packet_header.end(); it++) {
+        printf("%d, ", (*it)? 1:0);
+    }
+    printf("]\n");
+}
+
+void print_passed_port(std::list< uint32_t > passed_port) {
+    printf("{ ");
+    for (std::list< uint32_t >::iterator it = passed_port.begin(); it != passed_port.end(); it++) {
+        printf("%u => ", *it);
+    }
+    printf("}\n");
 }

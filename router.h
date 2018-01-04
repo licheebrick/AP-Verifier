@@ -8,10 +8,11 @@
 #include <cstdint>
 #include <map>
 #include <vector>
+#include <list>
 #include "ap_verifier_utils.h"
 #include "predicate_node.h"
 #include "ap_node.h"
-#include "ap_nodeS.h"
+#include "ap_nodeB.h"
 #include "ap_nodeV.h"
 
 class Router {
@@ -26,6 +27,9 @@ public:
 
     // map from inport to its ap represented in bool vector;
     std::map< uint32_t, std::map<Json::Value, APNodeV*>* > ap_vec_map;
+
+    // map from inport to its ap represented in bitset;
+    std::map< uint32_t, std::map<Json::Value, APNodeB*>* > ap_bset_map;
 
     // constructor
     Router(uint32_t id);
@@ -44,5 +48,9 @@ public:
     void print_router_apb_map();
 
     void print_router_apn_map();
+
+//    void propagate(std::vector< bool > packet_header, std::list< uint32_t > passed_port, uint32_t dst_port,
+//                   uint32_t inport, std::map< uint32_t, std::vector<uint32_t>* >* topology,
+//                   std::map< uint32_t, uint32_t >* inport_to_router, std::map< uint32_t, Router* >* id_to_router);
 };
 #endif //AP_VERIFIER_ROUTER_H

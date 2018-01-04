@@ -6,6 +6,8 @@
 #define AP_VERIFIER_AP_VERIFIER_UTILS_H
 
 #include <cstdint>
+#include <vector>
+#include <list>
 #include <json/json.h>
 
 #define PACKED __attribute__ ((__packed__))
@@ -17,7 +19,8 @@ enum PREDICATE_TYPE {
 enum AP_TYPE {
     VECTOR = 0,
     NUM_SET,
-    BITSET
+    BITSET,
+    NONE
 };
 
 struct PACKED List_t {
@@ -29,5 +32,8 @@ struct PACKED List_t {
 List_t make_sorted_list_from_array (uint32_t count, uint32_t elems[]);
 List_t val_to_list(const Json::Value &val);
 std::string list_to_string(List_t p);
+void print_bool_vector(std::vector< bool > packet_header);
+void print_passed_port(std::list< uint32_t > passed_port);
+
 
 #endif //AP_VERIFIER_AP_VERIFIER_UTILS_H
