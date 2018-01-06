@@ -4,12 +4,9 @@
 #include "router.h"
 
 Router::Router(uint32_t router_id) :router_id(router_id){
-    printf("Creating router %u...\n", router_id);
 }
 
 Router::~Router() {
-    printf("Into ~Router()\n");
-
     // clear predicate_map
     std::map< uint32_t, std::map<Json::Value, PredicateNode*>* >::iterator pmit;
     for (pmit = predicate_map.begin(); pmit != predicate_map.end(); pmit++) {
@@ -77,6 +74,25 @@ void Router::print_router() {
         }
     }
     printf("%s\n", string(40, '-').c_str());
+}
+
+string Router::to_string() {
+    map<uint32_t, map<Json::Value, PredicateNode*>* >::iterator it;
+    stringstream result;
+    char buf[40];
+    sprintf(buf, "%u", this->router_id);
+    result << "Printing router " << buf << ":\n";
+    for (it = predicate_map.begin(); it != predicate_map.end(); it++) {
+        map<Json::Value, PredicateNode*>::iterator pit;
+        result << string(40, '-') << "\nInport ";
+        sprintf(buf, "%u", it->first);
+        result << buf << "'s predicate list:\n";
+        for (pit = (*it).second->begin(); pit != (*it).second->end(); pit++) {
+            result << pit->second->to_string();
+        }
+    }
+    result << string(40, '-') << "\n";
+    return result.str();
 }
 
 void Router::convert_to_ap(AP_TYPE type, vector< bdd >* ap_list) {

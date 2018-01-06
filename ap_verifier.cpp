@@ -5,19 +5,18 @@
 #include "ap_verifier.h"
 #include <assert.h>
 #include <set>
+#include <json/json.h>
+#include <sys/time.h>
 
 using namespace std;
 using namespace log4cxx;
 
-LoggerPtr APVerifier::logger(Logger::getLogger("APVerifier"));
-
 APVerifier::APVerifier(int length, AP_TYPE type) {
-    this->length = length;
+    this->hdr_len = length;
     this->ap_type = type;
 }
 
 APVerifier::~APVerifier() {
-    printf("Into ~APVerifier().\n");
     // clear topology
     std::map< uint32_t, std::vector<uint32_t>* >::iterator tpit;
     for (tpit = topology.begin(); tpit != topology.end(); tpit++) {
@@ -52,6 +51,23 @@ void APVerifier::add_link(uint32_t from_port, uint32_t to_port) {
     }
 }
 
+string APVerifier::topology_to_string() {
+    std::map< uint32_t, std::vector<uint32_t>* >::iterator it;
+    stringstream result;
+    char buf[40];
+    result << "Now printing the topology...\n";
+    for (it = topology.begin(); it != topology.end(); it++) {
+        sprintf(buf, "%u --> ( ", it->first);
+        result << buf;
+        for (size_t i = 0; i < (*it).second->size(); i++) {
+            sprintf(buf, "%u ", it->second->at(i));
+            result << buf;
+        }
+        result << ")\n";
+    }
+    return result.str();
+}
+
 void APVerifier::print_topology() {
     std::map< uint32_t, std::vector<uint32_t>* >::iterator it;
     printf("Now printing the topology...\n");
@@ -64,28 +80,36 @@ void APVerifier::print_topology() {
     }
 }
 
-void APVerifier::add_then_load_router(uint32_t router_id, Json::Value *root) {
+long APVerifier::add_then_load_router(uint32_t router_id, Json::Value *root) {
+    struct timeval start, end;
+    long run_time = 0;
+
     if (id_to_router.count(router_id) == 0 && router_id > 0) {
         Router* router = new Router(router_id);
         id_to_router[router_id] = router;
         Json::Value rules = (*root)["rules"];
-        // Json::Value ports = (*root)["ports"];
+        int rw_rule_count = 0;
+        gettimeofday(&start, NULL);
         for (unsigned i = 0; i < rules.size(); i++) {
-            // rule_counter++;
             string action = rules[i]["action"].asString();
             if (action =="fwd") {
                 string match = rules[i]["match"].asString();
-                assert(match.length() == length);
+                // assert(match.length() == length);
                 List_t in_ports;
                 in_ports = val_to_list(rules[i]["in_ports"]);
                 for (uint32_t idx = 0; idx < in_ports.size; idx++) {
                     uint32_t inport = in_ports.list[idx];
+
                     // add to inport_to_router
                     if (this->inport_to_router.count(inport) == 0) {
                         this->inport_to_router.insert(make_pair(inport, router_id));
                     } else {
                         if (this->inport_to_router[inport] != router_id) {
-                            printf("Wrong in configuration: one inport map to multiple router-id.\n");
+                            stringstream err_msg;
+                            err_msg << "Wrong in configuration: inport " << to_string(inport) <<
+                                    ", mapped to multiple router: " << to_string(router_id) << " and " <<
+                                    to_string(inport_to_router[inport]) << ".";
+                            LOG4CXX_ERROR(rlogger, err_msg.str());
                         }
                     }
 
@@ -93,7 +117,7 @@ void APVerifier::add_then_load_router(uint32_t router_id, Json::Value *root) {
                     //TODO: remove predicate with false BDD
                     if (router->predicate_map.count(inport) == 0) {
                         // We have never encountered any rule on this inport before;
-                        PredicateNode* predicate_node = new PredicateNode(inport, match, FWD, this->length);
+                        PredicateNode* predicate_node = new PredicateNode(inport, match, FWD, this->hdr_len);
                         predicate_node->out_ports = val_to_list(rules[i]["out_ports"]);
                         map<Json::Value, PredicateNode*>* port_map = new map<Json::Value, PredicateNode*>;
                         port_map->insert(make_pair(rules[i]["out_ports"], predicate_node));
@@ -104,7 +128,7 @@ void APVerifier::add_then_load_router(uint32_t router_id, Json::Value *root) {
                         if (router->predicate_map[inport]->count(rules[i]["out_ports"]) == 0) {
                             // We encountered rule on this inport, but never this action (outports)
                             // So we need to subtract the already dealt bdd
-                            PredicateNode* predicate_node = new PredicateNode(inport, match, FWD, this->length);
+                            PredicateNode* predicate_node = new PredicateNode(inport, match, FWD, this->hdr_len);
                             predicate_node->out_ports = val_to_list(rules[i]["out_ports"]);
                             predicate_node->predicate -= router->dealt_bdd_map[inport];
                             router->dealt_bdd_map[inport] |= predicate_node->predicate;
@@ -112,7 +136,7 @@ void APVerifier::add_then_load_router(uint32_t router_id, Json::Value *root) {
                         } else {
                             // We encountered rule on this inport with this action (outports)
                             PredicateNode* predicate_node = (router->predicate_map[inport])->at(rules[i]["out_ports"]);
-                            bdd new_add = match2bdd(match, this->length) - router->dealt_bdd_map[inport];
+                            bdd new_add = match2bdd(match, this->hdr_len) - router->dealt_bdd_map[inport];
                             predicate_node->predicate |= new_add;
                             router->dealt_bdd_map[inport] |= new_add;
                         }
@@ -120,21 +144,32 @@ void APVerifier::add_then_load_router(uint32_t router_id, Json::Value *root) {
                 }
             } else { // "rw"
                 //TODO::ADD REWRITE IMPLEMENTATION
-                LOG4CXX_WARN(logger, "No rewrite rule supported yet, just ignore.\n");
+                rw_rule_count++;
             }
         }
-        // router->print_router();
+        gettimeofday(&end, NULL);
+        run_time = 1000000 * (end.tv_sec - end.tv_sec) + end.tv_usec - start.tv_usec;
+        stringstream msg;
+        msg << "Finish load router " << to_string(router_id) << ", " << to_string(run_time) << " us used, total "
+            << to_string(rules.size()) << " rules, " << rw_rule_count << " rewrite rules exclude.";
+        LOG4CXX_INFO(rlogger, msg.str());
     } else if (router_id == 0) {
-        LOG4CXX_ERROR(logger, "Cannot create table with ID 0.\n");
+        LOG4CXX_ERROR(rlogger, "Cannot create table with ID 0.\n");
     } else {
         stringstream error_msg;
-        error_msg << "Table " << router_id << " already exist. Can't add it again.";
-        LOG4CXX_ERROR(logger,error_msg.str());
+        error_msg << "Table " << to_string(router_id) << " already exist. Can't add it again.";
+        LOG4CXX_ERROR(rlogger, error_msg.str());
     }
+    if (show_detail) {
+        this->id_to_router[router_id]->print_router();
+    }
+    return run_time;
 }
 
 void APVerifier::make_atomic_predicates() {
-    // generate ap_bdd_list
+    struct timeval start_time, end_time;
+    gettimeofday(&start_time, NULL);
+
     std::map< uint32_t, Router* >::iterator it;
     std::list< bdd > ap_list;
     bdd true_bdd = bdd_true();
@@ -148,8 +183,8 @@ void APVerifier::make_atomic_predicates() {
                 // pn_it is predicate node iterator
                 bdd P = (*pn_it).second->predicate;
                 if (P != bddfalse && P != bddtrue) {
-                    int ori_size = int(ap_list.size());
-                    for (int i = 0; i < ori_size; i++) {
+                    uint32_t ori_size = ap_list.size();
+                    for (uint32_t i = 0; i < ori_size; i++) {
                         bool del_flag = false;
                         bdd bdd_now = ap_list.back();
                         bdd truesect = bdd_now & P;
@@ -170,27 +205,47 @@ void APVerifier::make_atomic_predicates() {
             }
         }
     }
-    //TODO: make sure here is safe... and valid...
-    printf("Finish generate atomic predicates, total %ld predicates for this network.\n", ap_list.size());
+    gettimeofday(&end_time, NULL);
+
+    stringstream msg;
+    long run_time = 1000000 * (end_time.tv_sec - start_time.tv_sec) + end_time.tv_usec - start_time.tv_usec;
+
+    msg << "Finish generating atomic predicates, " << to_string(run_time) << " us used, total " <<
+        to_string(ap_list.size()) << " predicates for this network.";
+    LOG4CXX_INFO(rlogger, msg.str());
+
     vector<bdd>* ap_bdd_vec = new vector<bdd>{make_move_iterator(begin(ap_list)), make_move_iterator(end(ap_list))};
     this->ap_bdd_list = ap_bdd_vec;
     this->ap_size = ap_list.size();
-    printf("These %d atomic predicates are as follows:\n", this->ap_size);
-    for (size_t i = 0; i < this->ap_bdd_list->size(); i++) {
-        bdd_allsat(this->ap_bdd_list->at(i), allsatPrintHandler);
+    if (show_detail) {
+        printf("These %d atomic predicates are as follows:\n", this->ap_size);
+        for (size_t i = 0; i < this->ap_bdd_list->size(); i++) {
+            bdd_allsat(this->ap_bdd_list->at(i), allsatPrintHandler);
+        }
     }
 }
 
 void APVerifier::convert_router_to_ap() {
     // convert every router to ap;
+    struct timeval start, end;
+    gettimeofday(&start, NULL);
     std::map< uint32_t, Router* >::iterator it;
     for (it = id_to_router.begin(); it != id_to_router.end(); it++) {
         (*it).second->convert_to_ap(this->ap_type, this->ap_bdd_list);
     }
-    printf("Finished converting all router's predicates to ap...\n");
+    gettimeofday(&end, NULL);
+    long run_time = end.tv_usec - start.tv_usec;
+    if (run_time < 0) {
+        run_time = 1000000 * (end.tv_sec - start.tv_sec);
+    }
+    stringstream msg;
+    msg << "Finished converting all router's predicates to ap, " << to_string(run_time) << " us used.";
+    LOG4CXX_INFO(rlogger, msg.str());
 
-    for (it = id_to_router.begin(); it != id_to_router.end(); it++) {
-        (*it).second->print_router_ap_map(this->ap_type);
+    if (show_detail) {
+        for (it = id_to_router.begin(); it != id_to_router.end(); it++) {
+            (*it).second->print_router_ap_map(this->ap_type);
+        }
     }
 }
 
@@ -236,9 +291,9 @@ void APVerifier::propagate_bdd(bdd packet_header, std::list< uint32_t > passed_p
     }
     Router* in_router = id_to_router[in_router_id];
 
-    printf("Now propagating on router %u, from inport %u, and dst_port: %u. Packet header is: ", in_router_id,
-           from_port, dst_port);
-    bdd_allsat(packet_header, allsatPrintHandler);
+    // printf("Now propagating on router %u, from inport %u, and dst_port: %u. Packet header is: ", in_router_id,
+    // from_port, dst_port);
+    // bdd_allsat(packet_header, allsatPrintHandler);
 
     // iterate on from_port's predicate list to find outports;
     std::map<Json::Value, PredicateNode *>::iterator it;
@@ -247,15 +302,15 @@ void APVerifier::propagate_bdd(bdd packet_header, std::list< uint32_t > passed_p
         bool continue_ppgt = false;
         bdd intersect = packet_header & (it->second->predicate);
 
-        printf("After match with this rule, we got packet header left as: \n");
-        bdd_allsat(intersect, allsatPrintHandler);
+        // printf("After match with this rule, we got packet header left as: \n");
+        // bdd_allsat(intersect, allsatPrintHandler);
 
         continue_ppgt = (intersect != bddfalse);
         if (continue_ppgt) {
             uint32_t outport;
             for (uint32_t i = 0; i < it->second->out_ports.size; i++) {
                 outport = it->second->out_ports.list[i];
-                printf("Now, continue propagate on one match, with outport %u.\n", outport);
+                // printf("Now, continue propagate on one match, with outport %u.\n", outport);
                 if (outport == dst_port) { // we finally reach where we need...
                     passed_port.push_back(outport);
                     printf("One path found: now print it: Match: \n");
@@ -309,9 +364,9 @@ void APVerifier::propagate_vec(std::vector<bool> packet_header, std::list<uint32
     }
     Router* in_router = id_to_router[in_router_id];
 
-    printf("Now propagating on router %u, from inport %u, and dst_port: %u. Packet header is: ", in_router_id,
-    from_port, dst_port);
-    print_bool_vector(packet_header);
+    // printf("Now propagating on router %u, from inport %u, and dst_port: %u. Packet header is: ", in_router_id,
+    // from_port, dst_port);
+    // print_bool_vector(packet_header);
 
     // iterate on from_port's predicate list to find outports;
     std::map<Json::Value, APNodeV *>::iterator it;
@@ -325,14 +380,14 @@ void APVerifier::propagate_vec(std::vector<bool> packet_header, std::list<uint32
                 continue_ppgt = true;
             }
         }
-        printf("After match with this rule, we got packet header left as: ");
-        print_bool_vector(intersect);
+        // printf("After match with this rule, we got packet header left as: ");
+        // print_bool_vector(intersect);
 
         if (continue_ppgt) {
             uint32_t outport;
             for (uint32_t i = 0; i < it->second->out_ports.size; i++) {
                 outport = it->second->out_ports.list[i];
-                printf("Now, continue propagate on one match, with outport %u.\n", outport);
+                // printf("Now, continue propagate on one match, with outport %u.\n", outport);
                 if (outport == dst_port) { // we finally reach where we need...
                     passed_port.push_back(outport);
                     printf("One path found: now print it: Match: ");
@@ -386,8 +441,8 @@ void APVerifier::propagate_bset(std::bitset<BITSETLEN> packet_header, std::list<
     }
     Router* in_router = id_to_router[in_router_id];
 
-    printf("Now propagating on router %u, from inport %u, and dst_port: %u. Packet header is: ", in_router_id,
-           from_port, dst_port);
+    // printf("Now propagating on router %u, from inport %u, and dst_port: %u. Packet header is: ", in_router_id,
+    //        from_port, dst_port);
     cout << packet_header << endl;
 
     // iterate on from_port's predicate list to find outports;
@@ -397,13 +452,13 @@ void APVerifier::propagate_bset(std::bitset<BITSETLEN> packet_header, std::list<
         bool continue_ppgt = false;
         std::bitset<BITSETLEN> intersect = packet_header & (it->second->match);
 
-        printf("After match with this rule, we got packet header left as: %s\n", intersect.to_string().c_str());
+        // printf("After match with this rule, we got packet header left as: %s\n", intersect.to_string().c_str());
         continue_ppgt = intersect.any();
         if (continue_ppgt) {
             uint32_t outport;
             for (uint32_t i = 0; i < it->second->out_ports.size; i++) {
                 outport = it->second->out_ports.list[i];
-                printf("Now, continue propagate on one match, with outport %u.\n", outport);
+                // printf("Now, continue propagate on one match, with outport %u.\n", outport);
                 if (outport == dst_port) { // we finally reach where we need...
                     passed_port.push_back(outport);
                     printf("One path found: now print it: Match: %s\n", intersect.to_string().c_str());

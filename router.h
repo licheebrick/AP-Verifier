@@ -39,6 +39,8 @@ public:
 
     void print_router();
 
+    string to_string();
+
     void convert_to_ap(AP_TYPE type, std::vector< bdd >* ap_list);
 
     void print_router_ap_map(AP_TYPE type);

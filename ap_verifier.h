@@ -6,19 +6,15 @@
 #define AP_VERIFIER_AP_VERIFIER_H
 #include <map>
 #include <json/json.h>
-#include "ap_verifier_utils.h"
 #include "predicate_node.h"
 #include "router.h"
 #include "log4cxx/logger.h"
 
-class APVerifier;
 class APVerifier {
-private:
-    static log4cxx::LoggerPtr logger;
 
 public:
-    // header length
-    int length;
+    // header length, in byte
+    int hdr_len;
 
     AP_TYPE ap_type;
 
@@ -40,7 +36,7 @@ public:
     std::map< uint32_t, uint32_t > inport_to_router;
 
     APVerifier(int length, AP_TYPE type);
-    int get_length() { return this->length; }
+    int get_length() { return this->hdr_len; }
 
     ~APVerifier();
 
@@ -48,7 +44,9 @@ public:
 
     void print_topology();
 
-    void add_then_load_router(uint32_t router_id, Json::Value *root);
+    string topology_to_string();
+
+    long add_then_load_router(uint32_t router_id, Json::Value *root);
 
     void make_atomic_predicates();
 

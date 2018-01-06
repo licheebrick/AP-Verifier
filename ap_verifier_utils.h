@@ -9,6 +9,7 @@
 #include <vector>
 #include <list>
 #include <json/json.h>
+#include <log4cxx/logger.h>
 
 #define PACKED __attribute__ ((__packed__))
 enum PREDICATE_TYPE {
@@ -28,6 +29,12 @@ struct PACKED List_t {
     uint32_t *list;
     bool shared;
 };
+
+extern log4cxx::LoggerPtr flogger;
+extern log4cxx::LoggerPtr clogger;
+extern log4cxx::LoggerPtr rlogger;
+
+extern bool show_detail;
 
 List_t make_sorted_list_from_array (uint32_t count, uint32_t elems[]);
 List_t val_to_list(const Json::Value &val);

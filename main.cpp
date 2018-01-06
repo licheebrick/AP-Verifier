@@ -1,26 +1,26 @@
 #include <iostream>
 #include <bdd.h>
 #include "json/json.h"
+#include <string.h>
 #include <fstream>
 #include <dirent.h>
 #include <sys/time.h>
 #include "ap_verifier.h"
 #include <log4cxx/logger.h>
+#include <log4cxx/basicconfigurator.h>
 #include "log4cxx/propertyconfigurator.h"
 #include <bitset>
 
+log4cxx::LoggerPtr flogger;
+log4cxx::LoggerPtr clogger;
+log4cxx::LoggerPtr rlogger;
+
+bool show_detail = false;
+
 using namespace std;
-using namespace log4cxx;
-using namespace log4cxx::helpers;
-
-int var_num = 2;
-
-void testBitsetBasic() {
-    bitset<8> be(0xff);
-    cout << be << endl;
-}
 
 void testBddBasic() {
+    int var_num = 8;
     bdd bdd3 = match2bdd("xxxxxx11", var_num);
     bdd bdd1 = match2bdd("xx11xxxxxxxx1111", var_num);
     bdd bdd2 = match2bdd("10xxxxxx", var_num);
@@ -54,7 +54,9 @@ list<long> load_apverifier_from_dir(string json_file_path, APVerifier *A) {
     string file_name = json_file_path + "/" + "topology.json";
     jsfile.open(file_name.c_str());
     if (!jsfile.good()) {
-        printf("Error opening the file %s\n", file_name.c_str());
+        stringstream err_msg;
+        err_msg << "Error opening the file " << file_name << "\n";
+        LOG4CXX_ERROR(rlogger, err_msg.str());
         return t_list;
     }
     reader.parse(jsfile, root, false);
@@ -62,7 +64,8 @@ list<long> load_apverifier_from_dir(string json_file_path, APVerifier *A) {
     for (unsigned i = 0; i < topology.size(); i++) {
         A->add_link(topology[i]["src"].asInt(), topology[i]["dst"].asInt());
     }
-    A->print_topology();
+
+    LOG4CXX_DEBUG(flogger, A->topology_to_string());
     jsfile.close();
 
     // read other json file
@@ -75,41 +78,39 @@ list<long> load_apverifier_from_dir(string json_file_path, APVerifier *A) {
             if (file_name.find(".rules.json") != string::npos ||
                     file_name.find(".tf.json") != string::npos) {
                 file_name = json_file_path + "/" + file_name;
-                printf("=== Loading rule file %s to APVerifier ===\n", file_name.c_str());
+                stringstream msg;
+                msg << "=== Loading rule file " << file_name << " to APVerifier ===";
+                LOG4CXX_INFO(rlogger, msg.str());
                 jsfile.open(file_name.c_str());
                 reader.parse(jsfile, root, false);
                 uint32_t router_id = root["id"].asInt();
-                gettimeofday(&start, NULL);
-                A->add_then_load_router(router_id, &root);
-                gettimeofday(&end, NULL);
-                run_time = end.tv_usec - start.tv_usec;
-                if (run_time < 0) {
-                    run_time = 1000000 * (end.tv_sec - start.tv_sec);
-                }
-                printf("%ld us used.\n", run_time);
-                A->id_to_router[router_id]->print_router();
+                run_time = A->add_then_load_router(router_id, &root);
                 total_run_time += run_time;
                 t_list.push_back(run_time);
                 jsfile.close();
                 router_counter++;
-
             }
         }
     }
-    printf("Total loading time: %ld us, %d routers, average loading time: %ld us\n", total_run_time, router_counter,
-    total_run_time / router_counter);
+    // printf("%s\n", string(40, '=').c_str());
+    // printf("Total loading time: %ld us, %d routers, average loading time: %ld us\n", total_run_time, router_counter,
+    stringstream msg;
+    msg << "Total loading time: " << to_string(total_run_time) << " us, " << to_string(router_counter) <<
+        " routers, average load time: " << to_string(total_run_time / router_counter) << " us.";
+    LOG4CXX_INFO(rlogger, msg.str());
     closedir(dir);
+
     A->make_atomic_predicates();
-    printf("Double check.\n");
-    for (size_t i = 0; i < A->ap_bdd_list->size(); i++) {
-        bdd_allsat(A->ap_bdd_list->at(i), allsatPrintHandler);
-    }
+
     A->convert_router_to_ap();
+
     return t_list;
 }
 
 void load_action_file(string json_action_file, APVerifier *A) {
-    printf("Loading action file %s\n", json_action_file.c_str());
+    stringstream msg;
+    msg << "Loading action file " << json_action_file;
+    LOG4CXX_INFO(rlogger, msg.str());
     struct timeval start, end;
     long run_time;
     ifstream jsfile;
@@ -118,7 +119,9 @@ void load_action_file(string json_action_file, APVerifier *A) {
 
     jsfile.open(json_action_file.c_str());
     if (!jsfile.good()) {
-        printf("Error opening the file %s\n", json_action_file.c_str());
+        stringstream err_msg;
+        err_msg << "Error opening the file " << json_action_file;
+        LOG4CXX_ERROR(rlogger, err_msg.str());
         return;
     }
 
@@ -132,26 +135,26 @@ void load_action_file(string json_action_file, APVerifier *A) {
             gettimeofday(&start, NULL);
             A->query_reachability(from_port, to_port);
             gettimeofday(&end, NULL);
-            run_time = end.tv_usec - start.tv_usec;
-            if (run_time < 0) {
-                run_time = 1000000 * (end.tv_sec - start.tv_sec);
-            }
-            printf("Finished reachability query between %u and %u, time used: %ld us\n", from_port, to_port, run_time);
+            run_time = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
+            stringstream msg;
+            msg << "Finished reachability query between " << to_string(from_port) << " and " << to_string(to_port) <<
+                ", time used: " << to_string(run_time) << " us";
+            LOG4CXX_INFO(rlogger, msg.str());
         } else {
-            printf("Query %s not supported yet...\n", type.c_str());
+            stringstream msg;
+            msg << "Query " << type << " not supported yet...";
+            LOG4CXX_INFO(rlogger, msg.str());
         }
     }
     jsfile.close();
 }
 
 int main(int argc, char* argv[]) {
-    std::cout << "Hello, here is atomic-predicates Verifier." << std::endl;
     bool do_run_test = true;
     bool do_load_json_files = false;
     bool do_load_action = false;
-    int hdr_len = 1;
-    var_num = 8;
-    testBitsetBasic();
+    int hdr_len = 16;
+    int var_num = 128;
 
     string json_files_path = "";
     string action_json_file = "";
@@ -167,6 +170,7 @@ int main(int argc, char* argv[]) {
 
             printf("  settings:\n");
             printf("\t --hdr-len <length> : <length> of packet header (default is 1 byte).\n");
+            printf("\t -detailed : show detailed router information in console.\n");
             break;
         }
         if ( strcmp(argv[i],"--test") == 0 ) {
@@ -199,15 +203,25 @@ int main(int argc, char* argv[]) {
             hdr_len = atoi(argv[++i]);
             var_num = 8 * hdr_len;
         }
+
+        if ( strcmp(argv[i], "-detailed") == 0) {
+            show_detail = true;
+        }
     }
 
     // configure log4cxx.
-    PropertyConfigurator::configure("../Log4cxxConfig.conf");
+    log4cxx::PropertyConfigurator::configure("./Log4cxxConfig.conf");
+    flogger = log4cxx::Logger::getLogger("file");
+    clogger = log4cxx::Logger::getLogger("console");
+    rlogger = log4cxx::Logger::getLogger("root");
 
-    APVerifier *A = new APVerifier(var_num, NONE);
+    APVerifier *A = new APVerifier(hdr_len, NONE);
+    stringstream msg;
+    msg << "Starting AP-Verifier with header length (in byte): " << hdr_len;
+    LOG4CXX_INFO(rlogger, msg.str());
 
     // prepare bdd basics
-    bdd_init(10000, 1000);
+    bdd_init(1000000, 100000);
     bdd_setvarnum(var_num);
     // testBddBasic();
 

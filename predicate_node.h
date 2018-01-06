@@ -21,6 +21,7 @@ public:
     ~PredicateNode();
 
     void print_predicate_node();
+    string to_string();
 };
 
 bdd match2bdd(string match, int length);
