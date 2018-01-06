@@ -18,7 +18,7 @@ APVerifier::APVerifier(int length, AP_TYPE type) {
 
 APVerifier::~APVerifier() {
     // clear topology
-    std::map< uint32_t, std::vector<uint32_t>* >::iterator tpit;
+    std::map< uint64_t, std::vector<uint64_t>* >::iterator tpit;
     for (tpit = topology.begin(); tpit != topology.end(); tpit++) {
         if (tpit->second != NULL) {
             delete (*tpit).second;
@@ -43,24 +43,24 @@ APVerifier::~APVerifier() {
     delete ap_bdd_list;
 }
 
-void APVerifier::add_link(uint32_t from_port, uint32_t to_port) {
+void APVerifier::add_link(uint64_t from_port, uint64_t to_port) {
     if (topology.count(from_port) == 0) {
-        topology[from_port] = new std::vector<uint32_t>(1, to_port);
+        topology[from_port] = new std::vector<uint64_t>(1, to_port);
     } else {
         topology[from_port]->push_back(to_port);
     }
 }
 
 string APVerifier::topology_to_string() {
-    std::map< uint32_t, std::vector<uint32_t>* >::iterator it;
+    std::map< uint64_t, std::vector<uint64_t>* >::iterator it;
     stringstream result;
     char buf[40];
     result << "Now printing the topology...\n";
     for (it = topology.begin(); it != topology.end(); it++) {
-        sprintf(buf, "%u --> ( ", it->first);
+        sprintf(buf, "%lu --> ( ", it->first);
         result << buf;
         for (size_t i = 0; i < (*it).second->size(); i++) {
-            sprintf(buf, "%u ", it->second->at(i));
+            sprintf(buf, "%lu ", it->second->at(i));
             result << buf;
         }
         result << ")\n";
@@ -69,12 +69,12 @@ string APVerifier::topology_to_string() {
 }
 
 void APVerifier::print_topology() {
-    std::map< uint32_t, std::vector<uint32_t>* >::iterator it;
+    std::map< uint64_t, std::vector<uint64_t>* >::iterator it;
     printf("Now printing the topology...\n");
     for (it = topology.begin(); it != topology.end(); it++) {
-        printf("%u --> ( ", (*it).first);
+        printf("%lu --> ( ", (*it).first);
         for (size_t i = 0; i < (*it).second->size(); i++) {
-            printf("%u ", (*it).second->at(i));
+            printf("%lu ", (*it).second->at(i));
         }
         printf(")\n");
     }
@@ -87,10 +87,11 @@ long APVerifier::add_then_load_router(uint32_t router_id, Json::Value *root) {
     if (id_to_router.count(router_id) == 0 && router_id > 0) {
         Router* router = new Router(router_id);
         id_to_router[router_id] = router;
-        Json::Value rules = (*root)["rules"];
+        Json::Value rules = (*root)["rule"];
         int rw_rule_count = 0;
         gettimeofday(&start, NULL);
-        for (unsigned i = 0; i < rules.size(); i++) {
+        for (uint32_t id = rules.size(); id != 0; id--) {
+            uint32_t i = id - 1;
             string action = rules[i]["action"].asString();
             if (action =="fwd") {
                 string match = rules[i]["match"].asString();
@@ -98,7 +99,7 @@ long APVerifier::add_then_load_router(uint32_t router_id, Json::Value *root) {
                 List_t in_ports;
                 in_ports = val_to_list(rules[i]["in_ports"]);
                 for (uint32_t idx = 0; idx < in_ports.size; idx++) {
-                    uint32_t inport = in_ports.list[idx];
+                    uint64_t inport = in_ports.list[idx];
 
                     // add to inport_to_router
                     if (this->inport_to_router.count(inport) == 0) {
@@ -148,11 +149,19 @@ long APVerifier::add_then_load_router(uint32_t router_id, Json::Value *root) {
             }
         }
         gettimeofday(&end, NULL);
-        run_time = 1000000 * (end.tv_sec - end.tv_sec) + end.tv_usec - start.tv_usec;
+        run_time = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
         stringstream msg;
         msg << "Finish load router " << to_string(router_id) << ", " << to_string(run_time) << " us used, total "
             << to_string(rules.size()) << " rules, " << rw_rule_count << " rewrite rules exclude.";
         LOG4CXX_INFO(rlogger, msg.str());
+        msg.str("");
+        msg << "This router has " << to_string(router->predicate_map.size()) << " inport predicates list, and each of them has [";
+        for (auto it = router->predicate_map.begin(); it != router->predicate_map.end(); it++) {
+            msg << to_string(it->second->size()) << ", ";
+        }
+        msg << "]";
+        LOG4CXX_INFO(rlogger, msg.str());
+
     } else if (router_id == 0) {
         LOG4CXX_ERROR(rlogger, "Cannot create table with ID 0.\n");
     } else {
@@ -169,13 +178,18 @@ long APVerifier::add_then_load_router(uint32_t router_id, Json::Value *root) {
 void APVerifier::make_atomic_predicates() {
     struct timeval start_time, end_time;
     gettimeofday(&start_time, NULL);
-
+    stringstream msg;
+    msg << "Start make atomic predicates...";
+    LOG4CXX_INFO(rlogger, msg.str());
     std::map< uint32_t, Router* >::iterator it;
     std::list< bdd > ap_list;
     bdd true_bdd = bdd_true();
     ap_list.push_back(true_bdd);
     for (it = id_to_router.begin(); it != id_to_router.end(); it++) { // it is router iterator
-        std::map< uint32_t, std::map<Json::Value, PredicateNode*>* >::iterator port_it;
+        std::map< uint64_t, std::map<Json::Value, PredicateNode*>* >::iterator port_it;
+        msg.str("");
+        msg << "Now dealing with router " << to_string(it->second->router_id);
+        LOG4CXX_INFO(rlogger, msg.str());
         for (port_it = (*it).second->predicate_map.begin(); port_it != (*it).second->predicate_map.end(); port_it++) {
             // port_it is port predicate map iterator
             std::map< Json::Value, PredicateNode* >::iterator pn_it;
@@ -183,8 +197,8 @@ void APVerifier::make_atomic_predicates() {
                 // pn_it is predicate node iterator
                 bdd P = (*pn_it).second->predicate;
                 if (P != bddfalse && P != bddtrue) {
-                    uint32_t ori_size = ap_list.size();
-                    for (uint32_t i = 0; i < ori_size; i++) {
+                    uint64_t ori_size = ap_list.size();
+                    for (uint64_t i = 0; i < ori_size; i++) {
                         bool del_flag = false;
                         bdd bdd_now = ap_list.back();
                         bdd truesect = bdd_now & P;
@@ -204,10 +218,13 @@ void APVerifier::make_atomic_predicates() {
                 }
             }
         }
+        msg.str("");
+        msg << "Atomic predicate number for now: " << to_string(ap_list.size());
+        LOG4CXX_INFO(rlogger, msg.str());
     }
     gettimeofday(&end_time, NULL);
 
-    stringstream msg;
+    msg.str("");
     long run_time = 1000000 * (end_time.tv_sec - start_time.tv_sec) + end_time.tv_usec - start_time.tv_usec;
 
     msg << "Finish generating atomic predicates, " << to_string(run_time) << " us used, total " <<
@@ -220,6 +237,7 @@ void APVerifier::make_atomic_predicates() {
     if (show_detail) {
         printf("These %d atomic predicates are as follows:\n", this->ap_size);
         for (size_t i = 0; i < this->ap_bdd_list->size(); i++) {
+            printf("Predicate %lu:\n", i);
             bdd_allsat(this->ap_bdd_list->at(i), allsatPrintHandler);
         }
     }
@@ -234,10 +252,7 @@ void APVerifier::convert_router_to_ap() {
         (*it).second->convert_to_ap(this->ap_type, this->ap_bdd_list);
     }
     gettimeofday(&end, NULL);
-    long run_time = end.tv_usec - start.tv_usec;
-    if (run_time < 0) {
-        run_time = 1000000 * (end.tv_sec - start.tv_sec);
-    }
+    long run_time = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
     stringstream msg;
     msg << "Finished converting all router's predicates to ap, " << to_string(run_time) << " us used.";
     LOG4CXX_INFO(rlogger, msg.str());
@@ -249,9 +264,9 @@ void APVerifier::convert_router_to_ap() {
     }
 }
 
-void APVerifier::query_reachability(uint32_t from_port, uint32_t to_port) {
+void APVerifier::query_reachability(uint64_t from_port, uint64_t to_port) {
     // create empty passed_port list
-    std::list< uint32_t > passed_port;
+    std::list< uint64_t > passed_port;
     switch (this->ap_type) {
         case VECTOR: {
             // create full packet_header
@@ -275,8 +290,8 @@ void APVerifier::query_reachability(uint32_t from_port, uint32_t to_port) {
     }
 }
 
-void APVerifier::propagate_bdd(bdd packet_header, std::list< uint32_t > passed_port, uint32_t from_port,
-                   uint32_t dst_port) {
+void APVerifier::propagate_bdd(bdd packet_header, std::list< uint64_t > passed_port, uint64_t from_port,
+                   uint64_t dst_port) {
     passed_port.push_back(from_port);
 
     // find from_port's router
@@ -307,7 +322,7 @@ void APVerifier::propagate_bdd(bdd packet_header, std::list< uint32_t > passed_p
 
         continue_ppgt = (intersect != bddfalse);
         if (continue_ppgt) {
-            uint32_t outport;
+            uint64_t outport;
             for (uint32_t i = 0; i < it->second->out_ports.size; i++) {
                 outport = it->second->out_ports.list[i];
                 // printf("Now, continue propagate on one match, with outport %u.\n", outport);
@@ -319,9 +334,8 @@ void APVerifier::propagate_bdd(bdd packet_header, std::list< uint32_t > passed_p
                     print_passed_port(passed_port);
                 } else {
                     // we encounter a loop...
-                    //TODO: maybe use algorithm's find? anyway...
                     bool looped = false;
-                    for (std::list<uint32_t>::iterator itr = passed_port.begin(); itr != passed_port.end();
+                    for (auto itr = passed_port.begin(); itr != passed_port.end();
                          itr++) {
                         if (*itr == outport) {
                             looped = true;
@@ -333,11 +347,11 @@ void APVerifier::propagate_bdd(bdd packet_header, std::list< uint32_t > passed_p
                         print_passed_port(passed_port);
                     } else {
                         // no loop, then continue propagate on all outports...
-                        std::vector<uint32_t>::iterator port_it;
+                        std::vector<uint64_t>::iterator port_it;
                         passed_port.push_back(outport);
                         for (port_it = topology[outport]->begin(); port_it != topology[outport]->end();
                              port_it++) {
-                            uint32_t new_router_id = inport_to_router[*port_it];
+                            // uint32_t new_router_id = inport_to_router[*port_it];
                             propagate_bdd(intersect, passed_port, *port_it,  dst_port);
                         }
                         passed_port.pop_back();
@@ -348,8 +362,8 @@ void APVerifier::propagate_bdd(bdd packet_header, std::list< uint32_t > passed_p
     }
 }
 
-void APVerifier::propagate_vec(std::vector<bool> packet_header, std::list<uint32_t> passed_port,
-                       uint32_t from_port, uint32_t dst_port) {
+void APVerifier::propagate_vec(std::vector<bool> packet_header, std::list<uint64_t> passed_port,
+                       uint64_t from_port, uint64_t dst_port) {
     passed_port.push_back(from_port);
 
     // find from_port's router
@@ -384,7 +398,7 @@ void APVerifier::propagate_vec(std::vector<bool> packet_header, std::list<uint32
         // print_bool_vector(intersect);
 
         if (continue_ppgt) {
-            uint32_t outport;
+            uint64_t outport;
             for (uint32_t i = 0; i < it->second->out_ports.size; i++) {
                 outport = it->second->out_ports.list[i];
                 // printf("Now, continue propagate on one match, with outport %u.\n", outport);
@@ -398,7 +412,7 @@ void APVerifier::propagate_vec(std::vector<bool> packet_header, std::list<uint32
                     // we encounter a loop...
                     //TODO: maybe use algorithm's find? anyway...
                     bool looped = false;
-                    for (std::list<uint32_t>::iterator itr = passed_port.begin(); itr != passed_port.end();
+                    for (auto itr = passed_port.begin(); itr != passed_port.end();
                          itr++) {
                         if (*itr == outport) {
                             looped = true;
@@ -410,11 +424,11 @@ void APVerifier::propagate_vec(std::vector<bool> packet_header, std::list<uint32
                         print_passed_port(passed_port);
                     } else {
                         // no loop, then continue propagate on all outports...
-                        std::vector<uint32_t>::iterator port_it;
+                        std::vector<uint64_t>::iterator port_it;
                         passed_port.push_back(outport);
                         for (port_it = topology[outport]->begin(); port_it != topology[outport]->end();
                              port_it++) {
-                            uint32_t new_router_id = inport_to_router[*port_it];
+                            // uint32_t new_router_id = inport_to_router[*port_it];
                             propagate_vec(intersect, passed_port, *port_it,  dst_port);
                         }
                         passed_port.pop_back();
@@ -425,8 +439,8 @@ void APVerifier::propagate_vec(std::vector<bool> packet_header, std::list<uint32
     }
 }
 
-void APVerifier::propagate_bset(std::bitset<BITSETLEN> packet_header, std::list<uint32_t> passed_port,
-                               uint32_t from_port, uint32_t dst_port) {
+void APVerifier::propagate_bset(std::bitset<BITSETLEN> packet_header, std::list<uint64_t> passed_port,
+                               uint64_t from_port, uint64_t dst_port) {
     passed_port.push_back(from_port);
 
     // find from_port's router
@@ -443,7 +457,7 @@ void APVerifier::propagate_bset(std::bitset<BITSETLEN> packet_header, std::list<
 
     // printf("Now propagating on router %u, from inport %u, and dst_port: %u. Packet header is: ", in_router_id,
     //        from_port, dst_port);
-    cout << packet_header << endl;
+    // cout << packet_header << endl;
 
     // iterate on from_port's predicate list to find outports;
     std::map<Json::Value, APNodeB *>::iterator it;
@@ -455,7 +469,7 @@ void APVerifier::propagate_bset(std::bitset<BITSETLEN> packet_header, std::list<
         // printf("After match with this rule, we got packet header left as: %s\n", intersect.to_string().c_str());
         continue_ppgt = intersect.any();
         if (continue_ppgt) {
-            uint32_t outport;
+            uint64_t outport;
             for (uint32_t i = 0; i < it->second->out_ports.size; i++) {
                 outport = it->second->out_ports.list[i];
                 // printf("Now, continue propagate on one match, with outport %u.\n", outport);
@@ -466,9 +480,8 @@ void APVerifier::propagate_bset(std::bitset<BITSETLEN> packet_header, std::list<
                     print_passed_port(passed_port);
                 } else {
                     // we encounter a loop...
-                    //TODO: maybe use algorithm's find? anyway...
                     bool looped = false;
-                    for (std::list<uint32_t>::iterator itr = passed_port.begin(); itr != passed_port.end();
+                    for (auto itr = passed_port.begin(); itr != passed_port.end();
                          itr++) {
                         if (*itr == outport) {
                             looped = true;
@@ -480,9 +493,8 @@ void APVerifier::propagate_bset(std::bitset<BITSETLEN> packet_header, std::list<
                         print_passed_port(passed_port);
                     } else {
                         // no loop, then continue propagate on all outports...
-                        std::vector<uint32_t>::iterator port_it;
                         passed_port.push_back(outport);
-                        for (port_it = topology[outport]->begin(); port_it != topology[outport]->end();
+                        for (auto port_it = topology[outport]->begin(); port_it != topology[outport]->end();
                              port_it++) {
                             uint32_t new_router_id = inport_to_router[*port_it];
                             propagate_bset(intersect, passed_port, *port_it,  dst_port);

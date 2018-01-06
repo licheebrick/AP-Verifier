@@ -4,7 +4,7 @@
 
 #include "predicate_node.h"
 
-PredicateNode::PredicateNode(uint32_t in_port, string match, PREDICATE_TYPE type, int hdr_len) {
+PredicateNode::PredicateNode(uint64_t in_port, string match, PREDICATE_TYPE type, int hdr_len) {
     this->in_port = in_port;
     this->type = type;
     int match_len = 8;

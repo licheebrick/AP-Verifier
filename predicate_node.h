@@ -13,10 +13,10 @@ class PredicateNode {
 public:
     bdd predicate;
     struct List_t out_ports;
-    uint32_t in_port;
+    uint64_t in_port;
     PREDICATE_TYPE type;
 
-    PredicateNode(uint32_t in_port, string match, PREDICATE_TYPE type, int hdr_len);
+    PredicateNode(uint64_t in_port, string match, PREDICATE_TYPE type, int hdr_len);
 
     ~PredicateNode();
 

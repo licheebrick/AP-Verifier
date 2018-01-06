@@ -1,11 +1,20 @@
-cmake-build-debug
-*.out
 .idea
 CMakeCache.txt
+
+cmake-build-debug
+*.out
 Makefile
 *.cmake
 CMakeFiles*
 *.cbp
 ap_verifier
-examples/stanford/*
-log.txt
+
+# log files
+*.txt
+
+# example networks
+examples/*
+!examples/simple_no_loop
+
+
+

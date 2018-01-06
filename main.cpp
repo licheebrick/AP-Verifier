@@ -62,7 +62,7 @@ list<long> load_apverifier_from_dir(string json_file_path, APVerifier *A) {
     reader.parse(jsfile, root, false);
     Json::Value topology = root["topology"];
     for (unsigned i = 0; i < topology.size(); i++) {
-        A->add_link(topology[i]["src"].asInt(), topology[i]["dst"].asInt());
+        A->add_link(topology[i]["src"].asUInt64(), topology[i]["dst"].asUInt64());
     }
 
     LOG4CXX_DEBUG(flogger, A->topology_to_string());
@@ -83,7 +83,7 @@ list<long> load_apverifier_from_dir(string json_file_path, APVerifier *A) {
                 LOG4CXX_INFO(rlogger, msg.str());
                 jsfile.open(file_name.c_str());
                 reader.parse(jsfile, root, false);
-                uint32_t router_id = root["id"].asInt();
+                uint32_t router_id = root["id"].asUInt();
                 run_time = A->add_then_load_router(router_id, &root);
                 total_run_time += run_time;
                 t_list.push_back(run_time);
@@ -130,8 +130,8 @@ void load_action_file(string json_action_file, APVerifier *A) {
     for (int i = 0; i < actions.size(); i++) {
         string type = actions[i]["method"].asString();
         if (type == "query_reach") {
-            uint32_t from_port = actions[i]["params"]["from_port"].asUInt();
-            uint32_t to_port = actions[i]["params"]["to_port"].asUInt();
+            uint32_t from_port = actions[i]["params"]["from_port"].asUInt64();
+            uint32_t to_port = actions[i]["params"]["to_port"].asUInt64();
             gettimeofday(&start, NULL);
             A->query_reachability(from_port, to_port);
             gettimeofday(&end, NULL);

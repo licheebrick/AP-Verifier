@@ -8,8 +8,7 @@ Router::Router(uint32_t router_id) :router_id(router_id){
 
 Router::~Router() {
     // clear predicate_map
-    std::map< uint32_t, std::map<Json::Value, PredicateNode*>* >::iterator pmit;
-    for (pmit = predicate_map.begin(); pmit != predicate_map.end(); pmit++) {
+    for (auto pmit = predicate_map.begin(); pmit != predicate_map.end(); pmit++) {
         if (pmit->second != NULL) {
             std::map<Json::Value, PredicateNode*>::iterator it;
             for (it = pmit->second->begin(); it != pmit->second->end(); it++) {
@@ -28,8 +27,7 @@ Router::~Router() {
     dealt_bdd_map.clear();
 
     // clear ap_vec_map
-    std::map< uint32_t, std::map<Json::Value, APNodeV*>* >::iterator avmit;
-    for (avmit = ap_vec_map.begin(); avmit != ap_vec_map.end(); avmit++) {
+    for (auto avmit = ap_vec_map.begin(); avmit != ap_vec_map.end(); avmit++) {
         if (avmit->second != NULL) {
             std::map<Json::Value, APNodeV*>::iterator it;
             for (it = avmit->second->begin(); it != avmit->second->end(); it++) {
@@ -45,8 +43,7 @@ Router::~Router() {
     ap_vec_map.clear();
 
     // clear ap_bset_map
-    std::map< uint32_t, std::map<Json::Value, APNodeB*>* >::iterator abmit;
-    for (abmit = ap_bset_map.begin(); abmit != ap_bset_map.end(); abmit++) {
+    for (auto abmit = ap_bset_map.begin(); abmit != ap_bset_map.end(); abmit++) {
         if (abmit->second != NULL) {
             std::map<Json::Value, APNodeB*>::iterator it;
             for (it = abmit->second->begin(); it != abmit->second->end(); it++) {
@@ -63,9 +60,8 @@ Router::~Router() {
 }
 
 void Router::print_router() {
-    map<uint32_t, map<Json::Value, PredicateNode*>* >::iterator it;
     printf("Printing router %d...\n", this->router_id);
-    for (it = predicate_map.begin(); it != predicate_map.end(); it++) {
+    for (auto it = predicate_map.begin(); it != predicate_map.end(); it++) {
         map<Json::Value, PredicateNode*>::iterator pit;
         printf("%s\n", string(40, '-').c_str());
         printf("Inport %d's predicate list:\n", (*it).first);
@@ -77,12 +73,12 @@ void Router::print_router() {
 }
 
 string Router::to_string() {
-    map<uint32_t, map<Json::Value, PredicateNode*>* >::iterator it;
+    // map<uint32_t, map<Json::Value, PredicateNode*>* >::iterator it;
     stringstream result;
     char buf[40];
     sprintf(buf, "%u", this->router_id);
     result << "Printing router " << buf << ":\n";
-    for (it = predicate_map.begin(); it != predicate_map.end(); it++) {
+    for (auto it = predicate_map.begin(); it != predicate_map.end(); it++) {
         map<Json::Value, PredicateNode*>::iterator pit;
         result << string(40, '-') << "\nInport ";
         sprintf(buf, "%u", it->first);
@@ -96,7 +92,7 @@ string Router::to_string() {
 }
 
 void Router::convert_to_ap(AP_TYPE type, vector< bdd >* ap_list) {
-    map<uint32_t, map<Json::Value, PredicateNode*>* >::iterator it;
+    map<uint64_t, map<Json::Value, PredicateNode*>* >::iterator it;
     switch (type) {
         case VECTOR: {
             for (it = predicate_map.begin(); it != predicate_map.end(); it++) {
@@ -129,7 +125,7 @@ void Router::convert_to_ap(AP_TYPE type, vector< bdd >* ap_list) {
 }
 
 void Router::print_router_apv_map() {
-    map<uint32_t, map<Json::Value, APNodeV*>* >::iterator it;
+    map<uint64_t, map<Json::Value, APNodeV*>* >::iterator it;
     printf("Printing router %d's AP(vector version)...\n", this->router_id);
     for (it = ap_vec_map.begin(); it != ap_vec_map.end(); it++) {
         map<Json::Value, APNodeV*>::iterator pit;
@@ -143,7 +139,7 @@ void Router::print_router_apv_map() {
 }
 
 void Router::print_router_apb_map(){
-    map<uint32_t, map<Json::Value, APNodeB*>* >::iterator it;
+    map<uint64_t, map<Json::Value, APNodeB*>* >::iterator it;
     printf("Printing router %d's AP(bitset version)...\n", this->router_id);
     for (it = ap_bset_map.begin(); it != ap_bset_map.end(); it++) {
         map<Json::Value, APNodeB*>::iterator pit;
