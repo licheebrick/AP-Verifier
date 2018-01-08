@@ -14,6 +14,7 @@
 #include "ap_node.h"
 #include "ap_nodeB.h"
 #include "ap_nodeV.h"
+#include "ap_nodeS.h"
 
 class Router {
 public:
@@ -30,6 +31,9 @@ public:
 
     // map from inport to its ap represented in bitset;
     std::map< uint64_t, std::map<Json::Value, APNodeB*>* > ap_bset_map;
+
+    // map from inport to its ap represented in number set;
+    std::map< uint64_t, std::map<Json::Value, APNodeS*>* > ap_nset_map;
 
     // constructor
     Router(uint32_t id);

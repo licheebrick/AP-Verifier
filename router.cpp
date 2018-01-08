@@ -64,7 +64,7 @@ void Router::print_router() {
     for (auto it = predicate_map.begin(); it != predicate_map.end(); it++) {
         map<Json::Value, PredicateNode*>::iterator pit;
         printf("%s\n", string(40, '-').c_str());
-        printf("Inport %d's predicate list:\n", (*it).first);
+        printf("Inport %ld's predicate list:\n", (*it).first);
         for (pit = (*it).second->begin(); pit != (*it).second->end(); pit++) {
             (*pit).second->print_predicate_node();
         }
@@ -81,7 +81,7 @@ string Router::to_string() {
     for (auto it = predicate_map.begin(); it != predicate_map.end(); it++) {
         map<Json::Value, PredicateNode*>::iterator pit;
         result << string(40, '-') << "\nInport ";
-        sprintf(buf, "%u", it->first);
+        sprintf(buf, "%lu", it->first);
         result << buf << "'s predicate list:\n";
         for (pit = (*it).second->begin(); pit != (*it).second->end(); pit++) {
             result << pit->second->to_string();
@@ -96,9 +96,8 @@ void Router::convert_to_ap(AP_TYPE type, vector< bdd >* ap_list) {
     switch (type) {
         case VECTOR: {
             for (it = predicate_map.begin(); it != predicate_map.end(); it++) {
-                map<Json::Value, APNodeV *> *ap_map = new map<Json::Value, APNodeV *>;
-                map<Json::Value, PredicateNode *>::iterator pit;
-                for (pit = it->second->begin(); pit != it->second->end(); pit++) {
+                auto *ap_map = new map<Json::Value, APNodeV *>;
+                for (auto pit = it->second->begin(); pit != it->second->end(); pit++) {
                     APNodeV *apv = new APNodeV(pit->second, ap_list);
                     ap_map->insert(make_pair(pit->first, apv));
                 }
@@ -106,13 +105,21 @@ void Router::convert_to_ap(AP_TYPE type, vector< bdd >* ap_list) {
             }
             break;
         }
-        case NUM_SET:
+        case NUM_SET: {
+            for (it = predicate_map.begin(); it != predicate_map.end(); it++) {
+                auto *ap_map = new map<Json::Value, APNodeS* >;
+                for (auto pit = it->second->begin(); pit != it->second->end(); pit++) {
+                    APNodeS *aps = new APNodeS(pit->second, ap_list);
+                    ap_map->insert(make_pair(pit->first, aps));
+                }
+                ap_nset_map.insert(make_pair(it->first, ap_map));
+            }
+        }
             break;
         case BITSET: {
             for (it = predicate_map.begin(); it != predicate_map.end(); it++) {
-                map<Json::Value, APNodeB *> *ap_map = new map<Json::Value, APNodeB *>;
-                map<Json::Value, PredicateNode *>::iterator pit;
-                for (pit = it->second->begin(); pit != it->second->end(); pit++) {
+                auto *ap_map = new map<Json::Value, APNodeB *>;
+                for (auto pit = it->second->begin(); pit != it->second->end(); pit++) {
                     APNodeB *apb = new APNodeB(pit->second, ap_list);
                     ap_map->insert(make_pair(pit->first, apb));
                 }
@@ -130,7 +137,7 @@ void Router::print_router_apv_map() {
     for (it = ap_vec_map.begin(); it != ap_vec_map.end(); it++) {
         map<Json::Value, APNodeV*>::iterator pit;
         printf("%s\n", string(40, '-').c_str());
-        printf("Inport %d's predicate list:\n", (*it).first);
+        printf("Inport %ld's predicate list:\n", (*it).first);
         for (pit = (*it).second->begin(); pit != (*it).second->end(); pit++) {
             (*pit).second->print_apv_node();
         }
@@ -144,7 +151,7 @@ void Router::print_router_apb_map(){
     for (it = ap_bset_map.begin(); it != ap_bset_map.end(); it++) {
         map<Json::Value, APNodeB*>::iterator pit;
         printf("%s\n", string(40, '-').c_str());
-        printf("Inport %d's predicate list:\n", (*it).first);
+        printf("Inport %ld's predicate list:\n", (*it).first);
         for (pit = (*it).second->begin(); pit != (*it).second->end(); pit++) {
             (*pit).second->print_apb_node();
         }

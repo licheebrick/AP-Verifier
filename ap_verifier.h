@@ -6,6 +6,7 @@
 #define AP_VERIFIER_AP_VERIFIER_H
 #include <map>
 #include <json/json.h>
+#include <set>
 #include "predicate_node.h"
 #include "router.h"
 #include "log4cxx/logger.h"
@@ -50,9 +51,9 @@ public:
 
     void make_atomic_predicates();
 
-    void convert_router_to_ap();
+    void convert_router_to_ap(AP_TYPE type);
 
-    void query_reachability(uint64_t from_port, uint64_t to_port);
+    void query_reachability(uint64_t from_port, uint64_t to_port, AP_TYPE type);
 
     void propagate_bdd(bdd packet_header, std::list< uint64_t > passed_port, uint64_t from_port,
                        uint64_t dst_port);
@@ -62,8 +63,9 @@ public:
 
     void propagate_bset(std::bitset<BITSETLEN> packet_header, std::list< uint64_t > passed_port, uint64_t from_port,
                        uint64_t dst_port);
-};
 
-bdd match2bdd(string match, int length);
+    void propagate_numset(std::set< uint64_t > packet_header, std::list<uint64_t> passed_port,
+                                      uint64_t from_port, uint64_t dst_port);
+};
 
 #endif //AP_VERIFIER_AP_VERIFIER_H

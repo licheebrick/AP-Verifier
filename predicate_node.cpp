@@ -7,11 +7,7 @@
 PredicateNode::PredicateNode(uint64_t in_port, string match, PREDICATE_TYPE type, int hdr_len) {
     this->in_port = in_port;
     this->type = type;
-    int match_len = 8;
-    if (hdr_len != 1) {
-        match_len = 8 * hdr_len + hdr_len - 1;
-    }
-    this->predicate = match2bdd(match, match_len);
+    this->predicate = match2bdd(match, hdr_len);
 }
 
 PredicateNode::~PredicateNode(){
@@ -32,10 +28,14 @@ string PredicateNode::to_string() {
     return result.str();
 }
 
-bdd match2bdd(string match, int length) {
+bdd match2bdd(string match, int hdr_len) {
     bdd result = bddtrue;
+    int match_len = 8;
+    if (hdr_len != 1) {
+        match_len = 8 * hdr_len + hdr_len - 1;
+    }
     int idx = 0;
-    for (int i = 0; i < length; i++) {
+    for (int i = 0; i < match_len; i++) {
         if (match[i] == 'x') {
             idx++;
             continue;

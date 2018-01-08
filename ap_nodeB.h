@@ -10,7 +10,7 @@
 #include "predicate_node.h"
 
 using namespace std;
-const int BITSETLEN = 5;
+const int BITSETLEN = 16300;
 
 class APNodeB : public APNode {
 public:

@@ -21,7 +21,8 @@ enum AP_TYPE {
     VECTOR = 0,
     NUM_SET,
     BITSET,
-    NONE
+    NONE,
+    ALL
 };
 
 struct PACKED List_t {

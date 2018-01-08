@@ -102,7 +102,9 @@ list<long> load_apverifier_from_dir(string json_file_path, APVerifier *A) {
 
     A->make_atomic_predicates();
 
-    A->convert_router_to_ap();
+    A->convert_router_to_ap(BITSET);
+    A->convert_router_to_ap(NUM_SET);
+    A->convert_router_to_ap(VECTOR);
 
     return t_list;
 }
@@ -111,8 +113,7 @@ void load_action_file(string json_action_file, APVerifier *A) {
     stringstream msg;
     msg << "Loading action file " << json_action_file;
     LOG4CXX_INFO(rlogger, msg.str());
-    struct timeval start, end;
-    long run_time;
+
     ifstream jsfile;
     Json::Value root;
     Json::Reader reader;
@@ -130,16 +131,13 @@ void load_action_file(string json_action_file, APVerifier *A) {
     for (int i = 0; i < actions.size(); i++) {
         string type = actions[i]["method"].asString();
         if (type == "query_reach") {
-            uint32_t from_port = actions[i]["params"]["from_port"].asUInt64();
-            uint32_t to_port = actions[i]["params"]["to_port"].asUInt64();
-            gettimeofday(&start, NULL);
-            A->query_reachability(from_port, to_port);
-            gettimeofday(&end, NULL);
-            run_time = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
-            stringstream msg;
-            msg << "Finished reachability query between " << to_string(from_port) << " and " << to_string(to_port) <<
-                ", time used: " << to_string(run_time) << " us";
-            LOG4CXX_INFO(rlogger, msg.str());
+            uint64_t from_port = actions[i]["params"]["from_port"].asUInt64();
+            uint64_t to_port = actions[i]["params"]["to_port"].asUInt64();
+            A->query_reachability(from_port, to_port, NONE);
+            A->query_reachability(from_port, to_port, BITSET);
+            A->query_reachability(from_port, to_port, NUM_SET);
+            A->query_reachability(from_port, to_port, VECTOR);
+
         } else {
             stringstream msg;
             msg << "Query " << type << " not supported yet...";
@@ -230,7 +228,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (do_load_action) {
-        load_action_file(action_json_file, A);
+        // load_action_file(action_json_file, A);
     }
 
     delete A;

@@ -14,7 +14,7 @@ ap_verifier
 
 # example networks
 examples/*
-!examples/simple_no_loop
+# !examples/simple_no_loop
 
 
 

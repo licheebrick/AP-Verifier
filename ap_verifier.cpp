@@ -7,6 +7,7 @@
 #include <set>
 #include <json/json.h>
 #include <sys/time.h>
+#include <algorithm>
 
 using namespace std;
 using namespace log4cxx;
@@ -87,7 +88,7 @@ long APVerifier::add_then_load_router(uint32_t router_id, Json::Value *root) {
     if (id_to_router.count(router_id) == 0 && router_id > 0) {
         Router* router = new Router(router_id);
         id_to_router[router_id] = router;
-        Json::Value rules = (*root)["rule"];
+        Json::Value rules = (*root)["rules"];
         int rw_rule_count = 0;
         gettimeofday(&start, NULL);
         for (uint32_t id = rules.size(); id != 0; id--) {
@@ -243,13 +244,13 @@ void APVerifier::make_atomic_predicates() {
     }
 }
 
-void APVerifier::convert_router_to_ap() {
+void APVerifier::convert_router_to_ap(AP_TYPE type) {
     // convert every router to ap;
     struct timeval start, end;
     gettimeofday(&start, NULL);
     std::map< uint32_t, Router* >::iterator it;
     for (it = id_to_router.begin(); it != id_to_router.end(); it++) {
-        (*it).second->convert_to_ap(this->ap_type, this->ap_bdd_list);
+        (*it).second->convert_to_ap(type, this->ap_bdd_list);
     }
     gettimeofday(&end, NULL);
     long run_time = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
@@ -264,20 +265,31 @@ void APVerifier::convert_router_to_ap() {
     }
 }
 
-void APVerifier::query_reachability(uint64_t from_port, uint64_t to_port) {
+void APVerifier::query_reachability(uint64_t from_port, uint64_t to_port, AP_TYPE type) {
     // create empty passed_port list
+    struct timeval start, end;
+    long run_time;
+    gettimeofday(&start, NULL);
     std::list< uint64_t > passed_port;
-    switch (this->ap_type) {
+    switch (type) {
         case VECTOR: {
             // create full packet_header
-            std::vector<bool> packet_header = std::vector<bool>(ap_size, true);
+            std::vector< bool > packet_header = std::vector<bool>(ap_size, true);
             propagate_vec(packet_header, passed_port, from_port, to_port);
             break;
         }
         case BITSET: {
-            std::bitset<BITSETLEN> packet_header;
+            std::bitset< BITSETLEN > packet_header;
             packet_header.flip();
             propagate_bset(packet_header, passed_port, from_port, to_port);
+            break;
+        }
+        case NUM_SET: {
+            std::set<uint64_t> packet_header;
+            for (uint64_t i = 0; i < this->ap_bdd_list->size(); i++) {
+                packet_header.insert(i);
+            }
+            propagate_numset(packet_header, passed_port, from_port, to_port);
             break;
         }
         case NONE: {
@@ -285,9 +297,13 @@ void APVerifier::query_reachability(uint64_t from_port, uint64_t to_port) {
             propagate_bdd(packet_header, passed_port, from_port, to_port);
             break;
         }
-        case NUM_SET:
-            break;
     }
+    gettimeofday(&end, NULL);
+    run_time = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
+    stringstream msg;
+    msg << "Finished reachability query between " << to_string(from_port) << " and " << to_string(to_port) <<
+        ", time used: " << to_string(run_time) << " us";
+    LOG4CXX_INFO(rlogger, msg.str());
 }
 
 void APVerifier::propagate_bdd(bdd packet_header, std::list< uint64_t > passed_port, uint64_t from_port,
@@ -296,19 +312,15 @@ void APVerifier::propagate_bdd(bdd packet_header, std::list< uint64_t > passed_p
 
     // find from_port's router
     if (inport_to_router.count(from_port) == 0) {
-        printf("Wrong in action configuration: no port found!\n");
+        LOG4CXX_ERROR(rlogger, "Wrong in action configuration: no port found!\n");
         return;
     }
     uint32_t in_router_id = inport_to_router[from_port];
     if (id_to_router.count(in_router_id) == 0) {
-        printf("Wrong somewhere that no according router is found!\n");
+        LOG4CXX_ERROR(rlogger, "Wrong somewhere that no according router is found!\n");
         return;
     }
     Router* in_router = id_to_router[in_router_id];
-
-    // printf("Now propagating on router %u, from inport %u, and dst_port: %u. Packet header is: ", in_router_id,
-    // from_port, dst_port);
-    // bdd_allsat(packet_header, allsatPrintHandler);
 
     // iterate on from_port's predicate list to find outports;
     std::map<Json::Value, PredicateNode *>::iterator it;
@@ -317,15 +329,12 @@ void APVerifier::propagate_bdd(bdd packet_header, std::list< uint64_t > passed_p
         bool continue_ppgt = false;
         bdd intersect = packet_header & (it->second->predicate);
 
-        // printf("After match with this rule, we got packet header left as: \n");
-        // bdd_allsat(intersect, allsatPrintHandler);
-
         continue_ppgt = (intersect != bddfalse);
         if (continue_ppgt) {
             uint64_t outport;
             for (uint32_t i = 0; i < it->second->out_ports.size; i++) {
                 outport = it->second->out_ports.list[i];
-                // printf("Now, continue propagate on one match, with outport %u.\n", outport);
+                // printf("Now, we can continue propagate on one match, with outport %lu.\n", outport);
                 if (outport == dst_port) { // we finally reach where we need...
                     passed_port.push_back(outport);
                     printf("One path found: now print it: Match: \n");
@@ -345,13 +354,18 @@ void APVerifier::propagate_bdd(bdd packet_header, std::list< uint64_t > passed_p
                     if (looped) {
                         printf("Looped! The loop is: ");
                         print_passed_port(passed_port);
+                        printf("Loop's match: \n");
+                        bdd_allsat(intersect, allsatPrintHandler);
+                        return;
                     } else {
                         // no loop, then continue propagate on all outports...
                         std::vector<uint64_t>::iterator port_it;
                         passed_port.push_back(outport);
+                        if (topology.count(outport) == 0) {
+                            continue;
+                        }
                         for (port_it = topology[outport]->begin(); port_it != topology[outport]->end();
                              port_it++) {
-                            // uint32_t new_router_id = inport_to_router[*port_it];
                             propagate_bdd(intersect, passed_port, *port_it,  dst_port);
                         }
                         passed_port.pop_back();
@@ -368,19 +382,15 @@ void APVerifier::propagate_vec(std::vector<bool> packet_header, std::list<uint64
 
     // find from_port's router
     if (inport_to_router.count(from_port) == 0) {
-        printf("Wrong in action configuration: no port found!\n");
+        LOG4CXX_ERROR(rlogger, "Wrong in action configuration: no port found!\n");
         return;
     }
     uint32_t in_router_id = inport_to_router[from_port];
     if (id_to_router.count(in_router_id) == 0) {
-        printf("Wrong somewhere that no according router is found!\n");
+        LOG4CXX_ERROR(rlogger, "Wrong somewhere that no according router is found!\n");
         return;
     }
     Router* in_router = id_to_router[in_router_id];
-
-    // printf("Now propagating on router %u, from inport %u, and dst_port: %u. Packet header is: ", in_router_id,
-    // from_port, dst_port);
-    // print_bool_vector(packet_header);
 
     // iterate on from_port's predicate list to find outports;
     std::map<Json::Value, APNodeV *>::iterator it;
@@ -394,14 +404,12 @@ void APVerifier::propagate_vec(std::vector<bool> packet_header, std::list<uint64
                 continue_ppgt = true;
             }
         }
-        // printf("After match with this rule, we got packet header left as: ");
-        // print_bool_vector(intersect);
 
         if (continue_ppgt) {
             uint64_t outport;
             for (uint32_t i = 0; i < it->second->out_ports.size; i++) {
                 outport = it->second->out_ports.list[i];
-                // printf("Now, continue propagate on one match, with outport %u.\n", outport);
+                // printf("Now, continue propagate on one match, with outport %lu.\n", outport);
                 if (outport == dst_port) { // we finally reach where we need...
                     passed_port.push_back(outport);
                     printf("One path found: now print it: Match: ");
@@ -426,10 +434,90 @@ void APVerifier::propagate_vec(std::vector<bool> packet_header, std::list<uint64
                         // no loop, then continue propagate on all outports...
                         std::vector<uint64_t>::iterator port_it;
                         passed_port.push_back(outport);
+                        if (topology.count(outport) == 0) {
+                            continue;
+                        }
                         for (port_it = topology[outport]->begin(); port_it != topology[outport]->end();
                              port_it++) {
-                            // uint32_t new_router_id = inport_to_router[*port_it];
                             propagate_vec(intersect, passed_port, *port_it,  dst_port);
+                        }
+                        passed_port.pop_back();
+                    }
+                }
+            }
+        }
+    }
+}
+
+void print_set(std::set< uint64_t > packet_header) {
+    cout << "(";
+    for (auto it = packet_header.begin(); it != packet_header.end(); it++) {
+        cout << *it << ", ";
+    }
+    cout << ")" << endl;
+}
+
+void APVerifier::propagate_numset(std::set< uint64_t > packet_header, std::list<uint64_t> passed_port,
+                               uint64_t from_port, uint64_t dst_port) {
+    passed_port.push_back(from_port);
+
+    // find from_port's router
+    if (inport_to_router.count(from_port) == 0) {
+        LOG4CXX_ERROR(rlogger, "Wrong in action configuration: no port found!\n");
+        return;
+    }
+    uint32_t in_router_id = inport_to_router[from_port];
+    if (id_to_router.count(in_router_id) == 0) {
+        LOG4CXX_ERROR(rlogger, "Wrong somewhere that no according router is found!\n");
+        return;
+    }
+    Router* in_router = id_to_router[in_router_id];
+
+    // iterate on from_port's predicate list to find outports;
+    std::map<Json::Value, APNodeS *>::iterator it;
+    for (it = in_router->ap_nset_map[from_port]->begin(); it != in_router->ap_nset_map[from_port]->end(); it++) {
+        // whether there is any packet that can pass:
+        bool continue_ppgt = false;
+        std::set< uint64_t > intersect;
+        set_intersection(packet_header.begin(), packet_header.end(), it->second->match->begin(),
+                         it->second->match->end(), std::inserter(intersect, intersect.begin()));
+        continue_ppgt = !intersect.empty();
+
+        if (continue_ppgt) {
+            uint64_t outport;
+            for (uint32_t i = 0; i < it->second->out_ports.size; i++) {
+                outport = it->second->out_ports.list[i];
+                // printf("Now, continue propagate on one match, with outport %lu.\n", outport);
+                if (outport == dst_port) { // we finally reach where we need...
+                    passed_port.push_back(outport);
+                    printf("One path found: now print it: Match: ");
+                    print_set(intersect);
+                    printf("Path: ");
+                    print_passed_port(passed_port);
+                } else {
+                    // we encounter a loop...
+                    //TODO: maybe use algorithm's find? anyway...
+                    bool looped = false;
+                    for (auto itr = passed_port.begin(); itr != passed_port.end();
+                         itr++) {
+                        if (*itr == outport) {
+                            looped = true;
+                            break;
+                        }
+                    }
+                    if (looped) {
+                        printf("Looped! The loop is: ");
+                        print_passed_port(passed_port);
+                    } else {
+                        // no loop, then continue propagate on all outports...
+                        std::vector<uint64_t>::iterator port_it;
+                        passed_port.push_back(outport);
+                        if (topology.count(outport) == 0) {
+                            continue;
+                        }
+                        for (port_it = topology[outport]->begin(); port_it != topology[outport]->end();
+                             port_it++) {
+                            propagate_numset(intersect, passed_port, *port_it,  dst_port);
                         }
                         passed_port.pop_back();
                     }
@@ -445,19 +533,15 @@ void APVerifier::propagate_bset(std::bitset<BITSETLEN> packet_header, std::list<
 
     // find from_port's router
     if (inport_to_router.count(from_port) == 0) {
-        printf("Wrong in action configuration: no port found!\n");
+        LOG4CXX_ERROR(rlogger, "Wrong in action configuration: no port found!\n");
         return;
     }
     uint32_t in_router_id = inport_to_router[from_port];
     if (id_to_router.count(in_router_id) == 0) {
-        printf("Wrong somewhere that no according router is found!\n");
+        LOG4CXX_ERROR(rlogger, "Wrong somewhere that no according router is found!\n");
         return;
     }
     Router* in_router = id_to_router[in_router_id];
-
-    // printf("Now propagating on router %u, from inport %u, and dst_port: %u. Packet header is: ", in_router_id,
-    //        from_port, dst_port);
-    // cout << packet_header << endl;
 
     // iterate on from_port's predicate list to find outports;
     std::map<Json::Value, APNodeB *>::iterator it;
@@ -472,7 +556,7 @@ void APVerifier::propagate_bset(std::bitset<BITSETLEN> packet_header, std::list<
             uint64_t outport;
             for (uint32_t i = 0; i < it->second->out_ports.size; i++) {
                 outport = it->second->out_ports.list[i];
-                // printf("Now, continue propagate on one match, with outport %u.\n", outport);
+                // printf("Now, continue propagate on one match, with outport %lu.\n", outport);
                 if (outport == dst_port) { // we finally reach where we need...
                     passed_port.push_back(outport);
                     printf("One path found: now print it: Match: %s\n", intersect.to_string().c_str());
@@ -494,9 +578,11 @@ void APVerifier::propagate_bset(std::bitset<BITSETLEN> packet_header, std::list<
                     } else {
                         // no loop, then continue propagate on all outports...
                         passed_port.push_back(outport);
+                        if (topology.count(outport) == 0) {
+                            continue;
+                        }
                         for (auto port_it = topology[outport]->begin(); port_it != topology[outport]->end();
                              port_it++) {
-                            uint32_t new_router_id = inport_to_router[*port_it];
                             propagate_bset(intersect, passed_port, *port_it,  dst_port);
                         }
                         passed_port.pop_back();

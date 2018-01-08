@@ -10,7 +10,7 @@
 class APNode {
 public:
     List_t out_ports;
-    uint32_t in_port;
+    uint64_t in_port;
     AP_TYPE type;
 };
 #endif //AP_VERIFIER_AP_NODE_H
