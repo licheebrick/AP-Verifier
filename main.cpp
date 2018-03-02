@@ -102,9 +102,9 @@ list<long> load_apverifier_from_dir(string json_file_path, APVerifier *A) {
 
     A->make_atomic_predicates();
 
-    A->convert_router_to_ap(BITSET);
-    A->convert_router_to_ap(NUM_SET);
-    A->convert_router_to_ap(VECTOR);
+//    A->convert_router_to_ap(BITSET);
+//    A->convert_router_to_ap(NUM_SET);
+//    A->convert_router_to_ap(VECTOR);
 
     return t_list;
 }
@@ -134,9 +134,9 @@ void load_action_file(string json_action_file, APVerifier *A) {
             uint64_t from_port = actions[i]["params"]["from_port"].asUInt64();
             uint64_t to_port = actions[i]["params"]["to_port"].asUInt64();
             A->query_reachability(from_port, to_port, NONE);
-            A->query_reachability(from_port, to_port, BITSET);
-            A->query_reachability(from_port, to_port, NUM_SET);
-            A->query_reachability(from_port, to_port, VECTOR);
+//            A->query_reachability(from_port, to_port, BITSET);
+//            A->query_reachability(from_port, to_port, NUM_SET);
+//            A->query_reachability(from_port, to_port, VECTOR);
 
         } else {
             stringstream msg;
@@ -219,7 +219,7 @@ int main(int argc, char* argv[]) {
     LOG4CXX_INFO(rlogger, msg.str());
 
     // prepare bdd basics
-    bdd_init(1000000, 100000);
+    bdd_init(10000000, 1000000);
     bdd_setvarnum(var_num);
     // testBddBasic();
 
@@ -228,7 +228,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (do_load_action) {
-        // load_action_file(action_json_file, A);
+        load_action_file(action_json_file, A);
     }
 
     delete A;

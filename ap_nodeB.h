@@ -1,7 +1,3 @@
-//
-// Created by li danyang on 2018/1/4.
-//
-
 #ifndef AP_VERIFIER_AP_NODEB_H
 #define AP_VERIFIER_AP_NODEB_H
 
@@ -10,7 +6,7 @@
 #include "predicate_node.h"
 
 using namespace std;
-const int BITSETLEN = 16300;
+const int BITSETLEN = 16500;
 
 class APNodeB : public APNode {
 public:

@@ -1,6 +1,3 @@
-//
-// Created by li danyang on 2018/1/2.
-//
 
 #include "ap_nodeV.h"
 #include "ap_verifier_utils.h"

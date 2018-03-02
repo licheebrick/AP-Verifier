@@ -1,6 +1,3 @@
-//
-// Created by li danyang on 2018/1/2.
-//
 
 #ifndef AP_VERIFIER_AP_NODES_H
 #define AP_VERIFIER_AP_NODES_H

@@ -1,6 +1,4 @@
-//
-// Created by li danyang on 2017/12/30.
-//
+
 
 #ifndef AP_VERIFIER_AP_VERIFIER_UTILS_H
 #define AP_VERIFIER_AP_VERIFIER_UTILS_H

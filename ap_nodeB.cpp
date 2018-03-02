@@ -1,6 +1,3 @@
-//
-// Created by li danyang on 2018/1/4.
-//
 
 #include "ap_nodeB.h"
 

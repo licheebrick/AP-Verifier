@@ -1,6 +1,3 @@
-//
-// Created by li danyang on 2017/12/31.
-//
 
 #ifndef AP_VERIFIER_ROUTER_H
 #define AP_VERIFIER_ROUTER_H

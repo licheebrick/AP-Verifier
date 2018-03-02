@@ -1,6 +1,4 @@
-//
-// Created by li danyang on 2017/12/31.
-//
+
 #include "router.h"
 
 Router::Router(uint32_t router_id) :router_id(router_id){

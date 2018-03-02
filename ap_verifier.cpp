@@ -1,7 +1,3 @@
-//
-// Created by li danyang on 2017/12/30.
-//
-
 #include "ap_verifier.h"
 #include <assert.h>
 #include <set>
@@ -151,17 +147,17 @@ long APVerifier::add_then_load_router(uint32_t router_id, Json::Value *root) {
         }
         gettimeofday(&end, NULL);
         run_time = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
-        stringstream msg;
-        msg << "Finish load router " << to_string(router_id) << ", " << to_string(run_time) << " us used, total "
-            << to_string(rules.size()) << " rules, " << rw_rule_count << " rewrite rules exclude.";
-        LOG4CXX_INFO(rlogger, msg.str());
-        msg.str("");
-        msg << "This router has " << to_string(router->predicate_map.size()) << " inport predicates list, and each of them has [";
-        for (auto it = router->predicate_map.begin(); it != router->predicate_map.end(); it++) {
-            msg << to_string(it->second->size()) << ", ";
-        }
-        msg << "]";
-        LOG4CXX_INFO(rlogger, msg.str());
+//        stringstream msg;
+//        msg << "Finish load router " << to_string(router_id) << ", " << to_string(run_time) << " us used, total "
+//            << to_string(rules.size()) << " rules, " << rw_rule_count << " rewrite rules exclude.";
+//        LOG4CXX_INFO(rlogger, msg.str());
+//        msg.str("");
+//        msg << "This router has " << to_string(router->predicate_map.size()) << " inport predicates list, and each of them has [";
+//        for (auto it = router->predicate_map.begin(); it != router->predicate_map.end(); it++) {
+//            msg << to_string(it->second->size()) << ", ";
+//        }
+//        msg << "]";
+//        LOG4CXX_INFO(rlogger, msg.str());
 
     } else if (router_id == 0) {
         LOG4CXX_ERROR(rlogger, "Cannot create table with ID 0.\n");
@@ -190,7 +186,7 @@ void APVerifier::make_atomic_predicates() {
         std::map< uint64_t, std::map<Json::Value, PredicateNode*>* >::iterator port_it;
         msg.str("");
         msg << "Now dealing with router " << to_string(it->second->router_id);
-        LOG4CXX_INFO(rlogger, msg.str());
+        //LOG4CXX_INFO(rlogger, msg.str());
         for (port_it = (*it).second->predicate_map.begin(); port_it != (*it).second->predicate_map.end(); port_it++) {
             // port_it is port predicate map iterator
             std::map< Json::Value, PredicateNode* >::iterator pn_it;
@@ -219,9 +215,9 @@ void APVerifier::make_atomic_predicates() {
                 }
             }
         }
-        msg.str("");
-        msg << "Atomic predicate number for now: " << to_string(ap_list.size());
-        LOG4CXX_INFO(rlogger, msg.str());
+//        msg.str("");
+//        msg << "Atomic predicate number for now: " << to_string(ap_list.size());
+//        LOG4CXX_INFO(rlogger, msg.str());
     }
     gettimeofday(&end_time, NULL);
 
@@ -362,6 +358,7 @@ void APVerifier::propagate_bdd(bdd packet_header, std::list< uint64_t > passed_p
                         std::vector<uint64_t>::iterator port_it;
                         passed_port.push_back(outport);
                         if (topology.count(outport) == 0) {
+                            passed_port.pop_back();
                             continue;
                         }
                         for (port_it = topology[outport]->begin(); port_it != topology[outport]->end();
@@ -435,6 +432,7 @@ void APVerifier::propagate_vec(std::vector<bool> packet_header, std::list<uint64
                         std::vector<uint64_t>::iterator port_it;
                         passed_port.push_back(outport);
                         if (topology.count(outport) == 0) {
+                            passed_port.pop_back();
                             continue;
                         }
                         for (port_it = topology[outport]->begin(); port_it != topology[outport]->end();
@@ -513,6 +511,7 @@ void APVerifier::propagate_numset(std::set< uint64_t > packet_header, std::list<
                         std::vector<uint64_t>::iterator port_it;
                         passed_port.push_back(outport);
                         if (topology.count(outport) == 0) {
+                            passed_port.pop_back();
                             continue;
                         }
                         for (port_it = topology[outport]->begin(); port_it != topology[outport]->end();
@@ -579,6 +578,7 @@ void APVerifier::propagate_bset(std::bitset<BITSETLEN> packet_header, std::list<
                         // no loop, then continue propagate on all outports...
                         passed_port.push_back(outport);
                         if (topology.count(outport) == 0) {
+                            passed_port.pop_back();
                             continue;
                         }
                         for (auto port_it = topology[outport]->begin(); port_it != topology[outport]->end();
